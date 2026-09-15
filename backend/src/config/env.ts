@@ -27,4 +27,9 @@ export const env = {
   googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY ?? '',
 
   mailFrom: process.env.MAIL_FROM ?? 'noreply@tripplanner.app',
+
+  // PoC-Schalter: gibt Magic-Links direkt in der API-Antwort zurück statt sie nur per Mail zu
+  // verschicken. Unabhängig von NODE_ENV, damit es sich explizit an-/abschalten lässt.
+  // ACHTUNG: umgeht die E-Mail-Verifizierung, daher nur für Testbetrieb ohne echte Nutzer!
+  showAuthLinks: process.env.SHOW_AUTH_LINKS === 'true',
 };

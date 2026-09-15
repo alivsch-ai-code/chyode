@@ -36,8 +36,9 @@ export async function requestMagicLink(req: Request, res: Response) {
 
   res.json({
     message: 'Magic-Link wurde versendet (im Dev-Modus siehe Server-Konsole).',
-    // Nur zu Entwicklungszwecken direkt zurückgegeben, damit man nicht auf E-Mail warten muss:
-    devLink: env.nodeEnv !== 'production' ? link : undefined,
+    // Nur bei explizit aktiviertem PoC-Modus direkt zurückgegeben, damit man nicht auf eine
+    // echte Mail-Zustellung angewiesen ist:
+    devLink: env.showAuthLinks || env.nodeEnv !== 'production' ? link : undefined,
   });
 }
 

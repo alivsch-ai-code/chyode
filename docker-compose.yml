@@ -6,7 +6,7 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       POSTGRES_DB: tripplanner
     ports:
       - '127.0.0.1:5432:5432'
@@ -29,10 +29,11 @@ services:
         condition: service_healthy
     environment:
       PORT: 4000
-      NODE_ENV: production
-      FRONTEND_URL: http://localhost:3000
-      DATABASE_URL: postgresql://postgres:postgres@db:5432/tripplanner
-      JWT_SECRET: change-me-super-secret
+      NODE_ENV: ${NODE_ENV:-production}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@db:5432/tripplanner
+      JWT_SECRET: ${JWT_SECRET:-change-me-super-secret}
+      SHOW_AUTH_LINKS: ${SHOW_AUTH_LINKS:-false}
       RAPIDAPI_KEY: ${RAPIDAPI_KEY:-}
       BOOKING_RAPIDAPI_HOST: ${BOOKING_RAPIDAPI_HOST:-booking-com.p.rapidapi.com}
       AIRBNB_RAPIDAPI_HOST: ${AIRBNB_RAPIDAPI_HOST:-airbnb13.p.rapidapi.com}
@@ -48,7 +49,7 @@ services:
     depends_on:
       - backend
     environment:
-      NEXT_PUBLIC_API_URL: http://localhost:4000/api
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4000/api}
     ports:
       - '127.0.0.1:3000:3000'
 

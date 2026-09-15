@@ -4,6 +4,11 @@ COPY frontend/package*.json ./
 RUN npm install
 COPY frontend/ ./
 COPY shared/ ../shared/
+
+# Next.js bakes NEXT_PUBLIC_* vars in at build time, not at container runtime,
+# so it must be a build ARG rather than only a docker-compose `environment:` entry.
+ARG NEXT_PUBLIC_API_URL=http://localhost:4000/api
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 RUN npm run build
 
 FROM node:20-alpine

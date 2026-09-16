@@ -7,5 +7,17 @@
 
   Police is informed - your location is detected.
 
+  ------------------------------------------------------------
+  Unhandled exception in scanner.py, line 1337
+  Traceback (most recent call last):
+    File "bot.py", line 42, in <module>
+      target.exploit()
+    File "bot.py", line 17, in exploit
+      creds = self.result.get_credentials()
+  AttributeError: 'NoneType' object has no attribute 'get_credentials'
+
+  Segmentation fault (core dumped)
+  ------------------------------------------------------------
+
   (This connection will now be closed.)
 

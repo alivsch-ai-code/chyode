@@ -1,0 +1,11 @@
+
+  *** UNAUTHORIZED ACCESS ATTEMPT DETECTED ***
+
+  This connection attempt has been logged:
+  your IP address, timestamp and attempted username
+  are now on record.
+
+  Police is informed - your location is detected.
+
+  (This connection will now be closed.)
+

@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Server-Angriffsstatistik</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #0b0f14;
+    --panel: #131a22;
+    --border: #232d38;
+    --text: #e6edf3;
+    --muted: #8b98a5;
+    --accent: #ef4444;
+    --accent-soft: #f59e0b;
+    --good: #22c55e;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    padding: 24px 16px 48px;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; }
+  h1 { font-size: 1.5rem; margin: 0 0 4px; }
+  .sub { color: var(--muted); font-size: 0.9rem; margin-bottom: 28px; }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 14px;
+    margin-bottom: 28px;
+  }
+  .tile {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 18px;
+  }
+  .tile .label { color: var(--muted); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; }
+  .tile .value { font-size: 2rem; font-weight: 700; margin-top: 6px; }
+  .tile.danger .value { color: var(--accent); }
+  .tile.warn .value { color: var(--accent-soft); }
+  .tile.good .value { color: var(--good); }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 20px;
+  }
+  .panel h2 { font-size: 1rem; margin: 0 0 14px; color: var(--muted); font-weight: 600; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); }
+  th { color: var(--muted); font-weight: 500; font-size: 0.8rem; }
+  .mono { font-variant-numeric: tabular-nums; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .empty { color: var(--muted); font-size: 0.9rem; padding: 8px 0; }
+  #chart-wrap { position: relative; height: 220px; }
+  footer { color: var(--muted); font-size: 0.8rem; text-align: center; margin-top: 32px; }
+  a { color: inherit; }
+  .myip {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .myip .ip { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1.1rem; }
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 12px;
+    border-radius: 999px;
+    font-size: 0.85rem;
+    font-weight: 600;
+  }
+  .badge.ok { background: rgba(34,197,94,0.15); color: var(--good); }
+  .badge.blocked { background: rgba(239,68,68,0.15); color: var(--accent); }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>🛡️ Server-Angriffsstatistik</h1>
+    <div class="sub">Automatisch erfasst von fail2ban auf voting.azamatsysteme.fun &middot; aktualisiert alle 60s &middot; <span id="generated">lädt…</span></div>
+
+    <div class="panel myip">
+      <div>
+        <div class="label" style="color: var(--muted); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em;">Deine IP-Adresse</div>
+        <div class="ip" id="my-ip">wird ermittelt…</div>
+      </div>
+      <span class="badge" id="my-ip-status">–</span>
+    </div>
+
+    <div class="grid">
+      <div class="tile danger"><div class="label">Aktuell gesperrte IPs</div><div class="value" id="currently-banned">–</div></div>
+      <div class="tile warn"><div class="label">Insgesamt gesperrt</div><div class="value" id="total-banned">–</div></div>
+      <div class="tile"><div class="label">Fehlversuche gesamt</div><div class="value" id="total-failed">–</div></div>
+      <div class="tile good"><div class="label">Aktuell laufende Versuche</div><div class="value" id="currently-failed">–</div></div>
+    </div>
+
+    <div class="panel">
+      <h2>Fehlversuche pro Tag (letzte 14 Tage)</h2>
+      <div id="chart-wrap"><canvas id="chart"></canvas></div>
+    </div>
+
+    <div class="panel">
+      <h2>Aktuell gesperrte IP-Adressen</h2>
+      <div id="banned-list"></div>
+    </div>
+
+    <div class="panel">
+      <h2>Häufigste Angreifer-IPs (Top 10, gesamt)</h2>
+      <div id="top-ips"></div>
+    </div>
+
+    <footer>Läuft auf einem IONOS-VPS &middot; Schutz durch fail2ban + ufw</footer>
+  </div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+<script>
+let chart;
+
+function fmtDate(iso) {
+  try {
+    const d = new Date(iso);
+    return d.toLocaleString('de-DE', { dateStyle: 'medium', timeStyle: 'short' });
+  } catch { return iso; }
+}
+
+function renderTable(containerId, rows, columns, emptyText) {
+  const el = document.getElementById(containerId);
+  if (!rows || rows.length === 0) {
+    el.innerHTML = `<div class="empty">${emptyText}</div>`;
+    return;
+  }
+  let html = '<table><thead><tr>' + columns.map(c => `<th>${c.label}</th>`).join('') + '</tr></thead><tbody>';
+  for (const row of rows) {
+    html += '<tr>' + columns.map(c => `<td class="${c.mono ? 'mono' : ''}">${row[c.key]}</td>`).join('') + '</tr>';
+  }
+  html += '</tbody></table>';
+  el.innerHTML = html;
+}
+
+async function loadMyIp(bannedList) {
+  const ipEl = document.getElementById('my-ip');
+  const badgeEl = document.getElementById('my-ip-status');
+  let ip;
+  try {
+    ip = (await (await fetch('/myip?_=' + Date.now())).text()).trim();
+  } catch {
+    ipEl.textContent = 'nicht ermittelbar';
+    badgeEl.textContent = '–';
+    badgeEl.className = 'badge';
+    return;
+  }
+  ipEl.textContent = ip;
+  const isBanned = (bannedList || []).includes(ip);
+  if (isBanned) {
+    badgeEl.textContent = '🚫 aktuell gesperrt';
+    badgeEl.className = 'badge blocked';
+  } else {
+    badgeEl.textContent = '✅ nicht gesperrt';
+    badgeEl.className = 'badge ok';
+  }
+}
+
+async function load() {
+  let data;
+  try {
+    const res = await fetch('stats.json?_=' + Date.now());
+    data = await res.json();
+  } catch (e) {
+    document.getElementById('generated').textContent = 'Fehler beim Laden der Daten';
+    return;
+  }
+
+  document.getElementById('generated').textContent = 'Stand: ' + fmtDate(data.generated_at);
+  loadMyIp(data.currently_banned);
+  document.getElementById('currently-banned').textContent = (data.currently_banned || []).length;
+  document.getElementById('total-banned').textContent = data.total_banned ?? 0;
+  document.getElementById('total-failed').textContent = data.total_failed ?? 0;
+  document.getElementById('currently-failed').textContent = data.currently_failed ?? 0;
+
+  renderTable('banned-list',
+    (data.currently_banned || []).map(ip => ({ ip })),
+    [{ key: 'ip', label: 'IP-Adresse', mono: true }],
+    'Aktuell keine IP gesperrt.'
+  );
+
+  renderTable('top-ips',
+    data.top_attacker_ips || [],
+    [{ key: 'ip', label: 'IP-Adresse', mono: true }, { key: 'count', label: 'Sperrungen', mono: true }],
+    'Noch keine Daten.'
+  );
+
+  const days = (data.failed_by_day || []).map(d => d.date.slice(5));
+  const counts = (data.failed_by_day || []).map(d => d.count);
+
+  if (chart) {
+    chart.data.labels = days;
+    chart.data.datasets[0].data = counts;
+    chart.update();
+  } else {
+    const ctx = document.getElementById('chart').getContext('2d');
+    chart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: days,
+        datasets: [{
+          label: 'Fehlversuche',
+          data: counts,
+          backgroundColor: '#ef4444',
+          borderRadius: 4,
+          maxBarThickness: 28
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { ticks: { color: '#8b98a5' }, grid: { display: false } },
+          y: { beginAtZero: true, ticks: { color: '#8b98a5', precision: 0 }, grid: { color: '#232d38' } }
+        }
+      }
+    });
+  }
+}
+
+load();
+setInterval(load, 60000);
+</script>
+</body>
+</html>

@@ -33,8 +33,56 @@ export interface TripUser {
   name: string;
   email: string | null;
   role: ParticipantRole;
-  session_token: string;
   joined_at: string;
+}
+
+export type UserRole = 'admin' | 'user';
+export type UserStatus = 'active' | 'disabled';
+
+/** Öffentliche Sicht auf einen Account (wie sie das Backend ausliefert). */
+export interface AuthUser {
+  id: string;
+  email: string;
+  name: string | null;
+  role: UserRole;
+  status: UserStatus;
+  created_at: string;
+  last_login_at: string | null;
+}
+
+export type InviteStatus = 'pending' | 'accepted' | 'revoked' | 'expired';
+
+export interface InviteSummary {
+  id: string;
+  email: string;
+  name: string | null;
+  role: UserRole;
+  status: InviteStatus;
+  expires_at: string;
+  created_at: string;
+  invited_by_name: string | null;
+}
+
+/** Eintrag in "Meine Trips". */
+export interface MyTrip extends Trip {
+  my_role: ParticipantRole;
+  participant_count: number;
+  date_option_count: number;
+}
+
+export interface TripParticipant {
+  id: string;
+  name: string;
+  role: ParticipantRole;
+  joined_at: string;
+}
+
+export interface TripDetailResponse {
+  trip: Trip;
+  participants: TripParticipant[];
+  myRole: ParticipantRole;
+  myParticipantId: string;
+  inviteLink: string;
 }
 
 export interface DateOption {

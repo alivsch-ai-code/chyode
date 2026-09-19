@@ -2,27 +2,133 @@
 @tailwind components;
 @tailwind utilities;
 
-html,
-body {
-  @apply bg-slate-50 text-slate-900;
+/* ------------------------------------------------------------
+   Design-Tokens (Apple-inspiriert): RGB-Kanäle für Alpha-Support
+   ------------------------------------------------------------ */
+:root {
+  color-scheme: light dark;
+
+  --canvas: 245 245 247;
+  --surface: 255 255 255;
+  --elevated: 255 255 255;
+  --grouped: 245 245 247;
+  --label: 29 29 31;
+  --secondary: 110 110 115;
+  --tertiary: 116 116 122;
+  --line: 210 210 215;
+  --fill: 118 118 128;
+  --accent: 0 113 227;
+  --accent-strong: 0 102 204;
+  --danger: 215 0 21;
+  --success: 36 138 61;
+  --warning: 178 80 0;
 }
 
-.btn-primary {
-  @apply inline-flex items-center justify-center rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50;
+@media (prefers-color-scheme: dark) {
+  :root {
+    --canvas: 0 0 0;
+    --surface: 28 28 30;
+    --elevated: 44 44 46;
+    --grouped: 44 44 46;
+    --label: 245 245 247;
+    --secondary: 174 174 178;
+    --tertiary: 142 142 147;
+    --line: 58 58 60;
+    --fill: 118 118 128;
+    --accent: 41 151 255;
+    --accent-strong: 102 178 255;
+    --danger: 255 105 97;
+    --success: 48 209 88;
+    --warning: 255 159 10;
+  }
 }
 
-.btn-secondary {
-  @apply inline-flex items-center justify-center rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50;
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-canvas font-sans text-body text-label antialiased;
+    font-feature-settings: 'kern', 'liga', 'calt';
+    text-rendering: optimizeLegibility;
+  }
+
+  h1, h2, h3, h4 {
+    text-wrap: balance;
+  }
+
+  ::selection {
+    background: rgb(var(--accent) / 0.25);
+  }
+
+  :focus-visible {
+    outline: 2px solid rgb(var(--accent));
+    outline-offset: 2px;
+    border-radius: 0.375rem;
+  }
+
+  input::placeholder,
+  textarea::placeholder {
+    color: rgb(var(--tertiary));
+  }
 }
 
-.card {
-  @apply rounded-xl border border-slate-200 bg-white p-6 shadow-sm;
+@layer components {
+  .card {
+    @apply rounded-card bg-surface shadow-card;
+  }
+
+  .card-flat {
+    @apply rounded-card border border-line/70 bg-surface;
+  }
+
+  /* Frosted-Glass wie bei Apple-Navigationsleisten */
+  .glass {
+    background: rgb(var(--surface) / 0.86);
+  }
+  @supports ((-webkit-backdrop-filter: none) or (backdrop-filter: none)) {
+    .glass {
+      background: rgb(var(--surface) / 0.72);
+      -webkit-backdrop-filter: saturate(180%) blur(20px);
+      backdrop-filter: saturate(180%) blur(20px);
+    }
+  }
+
+  .eyebrow {
+    @apply text-footnote font-semibold uppercase tracking-[0.08em] text-secondary;
+  }
+
+  .hairline {
+    @apply border-t border-line/70;
+  }
+
+  dialog::backdrop {
+    background: rgb(0 0 0 / 0.4);
+    -webkit-backdrop-filter: blur(6px);
+    backdrop-filter: blur(6px);
+    animation: fade-in 0.2s ease-out both;
+  }
 }
 
-.input {
-  @apply w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500;
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
-.label {
-  @apply mb-1 block text-sm font-medium text-slate-700;
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

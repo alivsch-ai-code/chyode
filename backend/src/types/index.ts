@@ -5,10 +5,45 @@ export type ParticipantRole = 'creator' | 'participant';
 export type NoteCategory = 'wish' | 'idea' | 'requirement';
 export type SearchProvider = 'booking' | 'airbnb' | 'rapidapi';
 
+export type UserRole = 'admin' | 'user';
+export type UserStatus = 'active' | 'disabled';
+
+/** Vollständige DB-Zeile inkl. Geheimnisse – niemals direkt an den Client schicken. */
 export interface User {
   id: string;
   email: string;
   name: string | null;
+  password_hash: string | null;
+  role: UserRole;
+  status: UserStatus;
+  token_version: number;
+  failed_logins: number;
+  locked_until: string | null;
+  last_login_at: string | null;
+  created_at: string;
+}
+
+/** Öffentliche Sicht auf einen Account. */
+export interface PublicUser {
+  id: string;
+  email: string;
+  name: string | null;
+  role: UserRole;
+  status: UserStatus;
+  created_at: string;
+  last_login_at: string | null;
+}
+
+export interface UserInvite {
+  id: string;
+  email: string;
+  name: string | null;
+  role: UserRole;
+  token_hash: string;
+  invited_by: string | null;
+  expires_at: string;
+  used_at: string | null;
+  revoked_at: string | null;
   created_at: string;
 }
 
@@ -36,7 +71,6 @@ export interface TripUser {
   name: string;
   email: string | null;
   role: ParticipantRole;
-  session_token: string;
   joined_at: string;
 }
 
@@ -87,7 +121,7 @@ declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace
   namespace Express {
     interface Request {
-      creator?: { userId: string; email: string };
+      user?: User;
       participant?: {
         id: string;
         tripId: string;

@@ -1,18 +1,38 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
+import type { ReactNode } from 'react';
 import './globals.css';
+import { Providers } from '@/components/Providers';
 import { Navbar } from '@/components/Navbar';
+import { Footer } from '@/components/Footer';
 
 export const metadata: Metadata = {
-  title: 'Gruppen-Reiseplaner',
-  description: 'Plant eure nächste Gruppenreise gemeinsam – Termine, Wünsche & Unterkünfte an einem Ort.',
+  title: { default: 'Reiseplaner', template: '%s · Reiseplaner' },
+  description: 'Reisen gemeinsam planen: Wochenenden abstimmen, Wünsche sammeln und passende Unterkünfte finden.',
+  applicationName: 'Reiseplaner',
+  // geschlossene Nutzergruppe: nicht in Suchmaschinen aufnehmen
+  robots: { index: false, follow: false },
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#f5f5f7' },
+    { media: '(prefers-color-scheme: dark)', color: '#000000' },
+  ],
+};
+
+export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="de">
-      <body>
-        <Navbar />
-        <main className="mx-auto max-w-4xl px-4 py-8">{children}</main>
+      <body className="flex min-h-dvh flex-col">
+        <Providers>
+          <Navbar />
+          <main id="main" className="mx-auto w-full max-w-content flex-1 px-4 py-8 sm:px-6 sm:py-12">
+            {children}
+          </main>
+          <Footer />
+        </Providers>
       </body>
     </html>
   );

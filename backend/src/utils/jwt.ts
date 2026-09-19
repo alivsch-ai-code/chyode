@@ -1,29 +1,19 @@
 import jwt from 'jsonwebtoken';
 import { env } from '../config/env';
 
-export interface CreatorTokenPayload {
-  userId: string;
-  email: string;
+export interface SessionTokenPayload {
+  sub: string; // user id
+  tv: number; // token_version des Users zum Zeitpunkt der Anmeldung
 }
 
-export interface MagicLinkTokenPayload {
-  userId: string;
-  email: string;
-  purpose: 'magic-link';
+export function signSessionToken(payload: SessionTokenPayload): string {
+  return jwt.sign(payload, env.jwtSecret, { expiresIn: `${env.sessionTtlDays}d` });
 }
 
-export function signCreatorSession(payload: CreatorTokenPayload): string {
-  return jwt.sign(payload, env.jwtSecret, {
-    expiresIn: `${env.creatorSessionTtlDays}d`,
-  });
-}
-
-export function signMagicLinkToken(payload: Omit<MagicLinkTokenPayload, 'purpose'>): string {
-  return jwt.sign({ ...payload, purpose: 'magic-link' }, env.jwtSecret, {
-    expiresIn: `${env.magicLinkTtlMin}m`,
-  });
-}
-
-export function verifyToken<T>(token: string): T {
-  return jwt.verify(token, env.jwtSecret) as T;
+export function verifySessionToken(token: string): SessionTokenPayload {
+  const decoded = jwt.verify(token, env.jwtSecret);
+  if (typeof decoded === 'string' || typeof decoded.sub !== 'string' || typeof decoded.tv !== 'number') {
+    throw new Error('Invalid session token');
+  }
+  return { sub: decoded.sub, tv: decoded.tv };
 }

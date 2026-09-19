@@ -32,8 +32,14 @@ services:
       NODE_ENV: ${NODE_ENV:-production}
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
       DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@db:5432/tripplanner
-      JWT_SECRET: ${JWT_SECRET:-change-me-super-secret}
-      SHOW_AUTH_LINKS: ${SHOW_AUTH_LINKS:-false}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET muss in der .env gesetzt sein (mind. 32 zufällige Zeichen)}
+      SMTP_HOST: ${SMTP_HOST:-smtp.ionos.de}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_SECURE: ${SMTP_SECURE:-}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      MAIL_FROM: ${MAIL_FROM:-}
+      APP_NAME: ${APP_NAME:-Gruppen-Reiseplaner}
       RAPIDAPI_KEY: ${RAPIDAPI_KEY:-}
       BOOKING_RAPIDAPI_HOST: ${BOOKING_RAPIDAPI_HOST:-booking-com.p.rapidapi.com}
       AIRBNB_RAPIDAPI_HOST: ${AIRBNB_RAPIDAPI_HOST:-airbnb13.p.rapidapi.com}

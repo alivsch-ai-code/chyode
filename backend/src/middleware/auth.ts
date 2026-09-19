@@ -1,59 +1,93 @@
-import { RequestHandler } from 'express';
+import { Request, RequestHandler } from 'express';
 import { query } from '../db/pool';
-import { TripUser } from '../types';
-import { unauthorized } from '../utils/httpError';
-import { verifyToken, CreatorTokenPayload } from '../utils/jwt';
+import { TripUser, User } from '../types';
+import { forbidden, notFound, unauthorized } from '../utils/httpError';
+import { verifySessionToken } from '../utils/jwt';
 
-/**
- * Authentifiziert den Trip-Ersteller über ein JWT (aus Magic-Link-Login).
- * Erwartet Header: Authorization: Bearer <jwt>
- */
-export const requireCreatorAuth: RequestHandler = (req, res, next) => {
-  const header = req.headers.authorization;
-  if (!header?.startsWith('Bearer ')) {
-    return next(unauthorized('Anmeldung erforderlich'));
-  }
+export const SESSION_COOKIE = 'tp_session';
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+export const isUuid = (value: unknown): value is string => typeof value === 'string' && UUID_RE.test(value);
+
+/** Lädt den angemeldeten Account aus dem Session-Cookie; wirft 401 bei jedem Problem. */
+async function loadSessionUser(req: Request): Promise<User> {
+  const token = req.cookies?.[SESSION_COOKIE];
+  if (typeof token !== 'string' || !token) throw unauthorized('Anmeldung erforderlich');
+
+  let payload;
   try {
-    const payload = verifyToken<CreatorTokenPayload>(header.slice('Bearer '.length));
-    req.creator = { userId: payload.userId, email: payload.email };
-    next();
+    payload = verifySessionToken(token);
   } catch {
-    next(unauthorized('Ungültiges oder abgelaufenes Token'));
+    throw unauthorized('Sitzung abgelaufen. Bitte erneut anmelden.');
+  }
+  if (!isUuid(payload.sub)) throw unauthorized('Sitzung abgelaufen. Bitte erneut anmelden.');
+
+  const result = await query<User>('SELECT * FROM users WHERE id = $1', [payload.sub]);
+  const user = result.rows[0];
+  // token_version ändert sich bei Passwortänderung/-reset und macht alte Sessions ungültig
+  if (!user || user.status !== 'active' || user.token_version !== payload.tv) {
+    throw unauthorized('Sitzung abgelaufen. Bitte erneut anmelden.');
+  }
+  return user;
+}
+
+/** Erfordert eine gültige Anmeldung (Cookie-Session). */
+export const requireAuth: RequestHandler = async (req, _res, next) => {
+  try {
+    req.user = await loadSessionUser(req);
+    next();
+  } catch (err) {
+    next(err);
+  }
+};
+
+/** Erfordert Anmeldung als Administrator. */
+export const requireAdmin: RequestHandler = async (req, _res, next) => {
+  try {
+    const user = await loadSessionUser(req);
+    if (user.role !== 'admin') throw forbidden('Nur Administratoren dürfen diese Aktion ausführen');
+    req.user = user;
+    next();
+  } catch (err) {
+    next(err);
   }
 };
 
 /**
- * Authentifiziert einen Trip-Teilnehmer über ein Session-Token (aus dem Einladungslink-Beitritt).
- * Erwartet Header: X-Participant-Token: <session_token>
+ * Erfordert Anmeldung UND Mitgliedschaft im Trip aus `req.params.tripId`.
+ * Setzt `req.participant` (Teilnehmer-Zeile des Accounts in diesem Trip).
  */
-export const requireParticipantAuth: RequestHandler = async (req, res, next) => {
-  const token = req.headers['x-participant-token'];
-  if (typeof token !== 'string' || !token) {
-    return next(unauthorized('Teilnehmer-Session erforderlich'));
-  }
+export const requireParticipantAuth: RequestHandler = async (req, _res, next) => {
+  try {
+    const user = await loadSessionUser(req);
+    req.user = user;
 
-  const result = await query<TripUser>(
-    'SELECT * FROM trip_users WHERE session_token = $1',
-    [token]
-  );
-  const participant = result.rows[0];
-  if (!participant) {
-    return next(unauthorized('Ungültige Teilnehmer-Session'));
-  }
+    const { tripId } = req.params;
+    if (!isUuid(tripId)) throw notFound('Trip nicht gefunden');
 
-  req.participant = {
-    id: participant.id,
-    tripId: participant.trip_id,
-    name: participant.name,
-    role: participant.role,
-  };
-  next();
+    const result = await query<TripUser>(
+      'SELECT * FROM trip_users WHERE trip_id = $1 AND user_id = $2',
+      [tripId, user.id]
+    );
+    const participant = result.rows[0];
+    if (!participant) throw forbidden('Du bist kein Teilnehmer dieses Trips');
+
+    req.participant = {
+      id: participant.id,
+      tripId: participant.trip_id,
+      name: participant.name,
+      role: participant.role,
+    };
+    next();
+  } catch (err) {
+    next(err);
+  }
 };
 
 /** Stellt sicher, dass der authentifizierte Teilnehmer der Ersteller des Trips ist. */
-export const requireTripCreatorParticipant: RequestHandler = (req, res, next) => {
+export const requireTripCreatorParticipant: RequestHandler = (req, _res, next) => {
   if (req.participant?.role !== 'creator') {
-    return next(unauthorized('Nur der Trip-Ersteller darf diese Aktion ausführen'));
+    return next(forbidden('Nur der Trip-Ersteller darf diese Aktion ausführen'));
   }
   next();
 };

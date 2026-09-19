@@ -1,198 +1,276 @@
 'use client';
 
-import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { apiFetch, setParticipantToken } from '@/lib/api';
-import type { Trip } from '@shared/types';
+import { useState } from 'react';
+import type { Trip, TripType } from '@shared/types';
+import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Field';
+import { Alert, Badge } from '@/components/ui/Feedback';
+import { IconCheck, IconChevronLeft } from '@/components/ui/Icons';
+import { Segmented } from '@/components/ui/Segmented';
+import { WeekendPicker } from '@/components/WeekendPicker';
+import { apiFetch, errorMessage } from '@/lib/api';
+import { TRIP_TYPE_LABELS, formatDateRange, nightsBetween, pluralize } from '@/lib/format';
+import { todayYmd, type Weekend } from '@/lib/weekends';
 
-interface DateOptionInput {
-  label: string;
-  startDate: string;
-  endDate: string;
-}
+type Step = 0 | 1 | 2;
+type DateMode = 'multiple_choice' | 'fixed';
 
-interface CreateTripResponse {
-  trip: Trip;
-  participantToken: string;
-  inviteLink: string;
-}
+const STEPS = ['Details', 'Termine', 'Überblick'];
 
 export function TripForm() {
   const router = useRouter();
-  const [creatorName, setCreatorName] = useState('');
+  const [step, setStep] = useState<Step>(0);
   const [title, setTitle] = useState('');
   const [location, setLocation] = useState('');
-  const [tripType, setTripType] = useState<'hut' | 'wellness' | 'hotel' | 'other'>('hut');
-  const [nights, setNights] = useState(2);
-  const [budgetPerPerson, setBudgetPerPerson] = useState('');
-  const [dateOptions, setDateOptions] = useState<DateOptionInput[]>([
-    { label: '', startDate: '', endDate: '' },
-  ]);
-  const [loading, setLoading] = useState(false);
+  const [tripType, setTripType] = useState<TripType>('hut');
+  const [budget, setBudget] = useState('');
+  const [dateMode, setDateMode] = useState<DateMode>('multiple_choice');
+  const [weekends, setWeekends] = useState<Weekend[]>([]);
+  const [fixedStart, setFixedStart] = useState('');
+  const [fixedEnd, setFixedEnd] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
-  function updateDateOption(index: number, patch: Partial<DateOptionInput>) {
-    setDateOptions((prev) => prev.map((opt, i) => (i === index ? { ...opt, ...patch } : opt)));
-  }
+  const fixedInvalid = dateMode === 'fixed' && (!fixedStart || !fixedEnd || fixedEnd <= fixedStart);
+  const detailsValid = title.trim().length > 0 && location.trim().length > 0;
+  const datesValid = dateMode === 'multiple_choice' ? weekends.length > 0 : !fixedInvalid;
 
-  function addDateOption() {
-    setDateOptions((prev) => [...prev, { label: '', startDate: '', endDate: '' }]);
-  }
+  // Nächte: bei Wochenenden die am häufigsten gewählte Länge, sonst aus dem festen Zeitraum
+  const nights =
+    dateMode === 'fixed'
+      ? Math.max(1, fixedStart && fixedEnd ? nightsBetween(fixedStart, fixedEnd) : 2)
+      : mostCommon(weekends.map((w) => w.nights)) ?? 2;
 
-  function removeDateOption(index: number) {
-    setDateOptions((prev) => prev.filter((_, i) => i !== index));
-  }
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setLoading(true);
+  function next() {
     setError(null);
+    if (step === 0 && !detailsValid) return;
+    if (step === 1 && !datesValid) return;
+    setStep((s) => Math.min(2, s + 1) as Step);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function back() {
+    setError(null);
+    setStep((s) => Math.max(0, s - 1) as Step);
+  }
+
+  async function create() {
+    setError(null);
+    setSubmitting(true);
     try {
-      const data = await apiFetch<CreateTripResponse>('/trips', {
+      const budgetNumber = budget.trim() ? Number(budget.replace(',', '.')) : undefined;
+      const result = await apiFetch<{ trip: Trip }>('/trips', {
         method: 'POST',
-        asCreator: true,
         body: {
-          title,
-          location,
+          title: title.trim(),
+          location: location.trim(),
           tripType,
-          dateMode: 'multiple_choice',
+          dateMode,
           nights,
-          budgetPerPerson: budgetPerPerson ? parseFloat(budgetPerPerson) : undefined,
-          creatorName,
-          dateOptions: dateOptions.filter((o) => o.label && o.startDate && o.endDate),
+          budgetPerPerson: budgetNumber && budgetNumber > 0 ? budgetNumber : undefined,
+          ...(dateMode === 'fixed'
+            ? { startDate: fixedStart, endDate: fixedEnd }
+            : {
+                dateOptions: weekends.map((w) => ({ label: w.label, startDate: w.startDate, endDate: w.endDate })),
+              }),
         },
       });
-
-      setParticipantToken(data.trip.id, data.participantToken);
-      router.push(`/trips/${data.trip.id}`);
+      router.push(`/trips/${result.trip.id}?neu=1`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Trip konnte nicht erstellt werden.');
-    } finally {
-      setLoading(false);
+      setError(errorMessage(err));
+      setSubmitting(false);
     }
   }
 
   return (
-    <form onSubmit={handleSubmit} className="card space-y-5">
-      <div>
-        <label className="label">Dein Name</label>
-        <input
-          className="input"
-          value={creatorName}
-          onChange={(e) => setCreatorName(e.target.value)}
-          required
-        />
-      </div>
+    <div className="space-y-8">
+      <ol aria-label="Fortschritt" className="flex items-center gap-2">
+        {STEPS.map((label, index) => {
+          const done = index < step;
+          const current = index === step;
+          return (
+            <li key={label} className="flex flex-1 items-center gap-2" aria-current={current ? 'step' : undefined}>
+              <span
+                className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-footnote font-semibold transition-colors ${
+                  done ? 'bg-accent text-white dark:text-black' : current ? 'bg-label text-canvas' : 'bg-fill/15 text-secondary'
+                }`}
+              >
+                {done ? <IconCheck size={14} strokeWidth={3} /> : index + 1}
+              </span>
+              <span className={`hidden text-subhead sm:inline ${current ? 'font-semibold' : 'text-secondary'}`}>{label}</span>
+              {index < STEPS.length - 1 && <span aria-hidden="true" className="h-px flex-1 bg-line" />}
+            </li>
+          );
+        })}
+      </ol>
 
-      <div>
-        <label className="label">Titel der Reise</label>
-        <input
-          className="input"
-          placeholder="z.B. Mädels-Wochenende im Schwarzwald"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          required
-        />
-      </div>
+      {error && <Alert tone="error">{error}</Alert>}
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div>
-          <label className="label">Ort / Region</label>
-          <input
-            className="input"
-            placeholder="Schwarzwald, Deutschland"
+      {step === 0 && (
+        <section className="card animate-fade-up space-y-6 p-6 sm:p-8" aria-labelledby="step-details">
+          <div>
+            <h2 id="step-details" className="text-title2">
+              Worum geht es?
+            </h2>
+            <p className="mt-1 text-callout text-secondary">Gib deiner Reise einen Namen und sag, wohin es gehen soll.</p>
+          </div>
+          <Input
+            label="Titel"
+            placeholder="z. B. Hüttenwochenende Herbst"
+            maxLength={200}
+            required
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+          />
+          <Input
+            label="Region oder Ort"
+            placeholder="z. B. Allgäu, Zillertal, Südtirol"
+            maxLength={200}
+            required
             value={location}
             onChange={(e) => setLocation(e.target.value)}
-            required
           />
-        </div>
-        <div>
-          <label className="label">Reiseart</label>
-          <select
-            className="input"
-            value={tripType}
-            onChange={(e) => setTripType(e.target.value as typeof tripType)}
-          >
-            <option value="hut">Hütte</option>
-            <option value="wellness">Wellness</option>
-            <option value="hotel">Hotel</option>
-            <option value="other">Sonstiges</option>
-          </select>
-        </div>
-      </div>
-
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div>
-          <label className="label">Anzahl Nächte</label>
-          <input
+          <div>
+            <p className="mb-2 text-subhead font-medium">Art der Unterkunft</p>
+            <Segmented
+              ariaLabel="Art der Unterkunft"
+              value={tripType}
+              onChange={setTripType}
+              options={(Object.keys(TRIP_TYPE_LABELS) as TripType[]).map((value) => ({
+                value,
+                label: TRIP_TYPE_LABELS[value],
+              }))}
+            />
+          </div>
+          <Input
+            label="Budget pro Person"
+            optional
             type="number"
-            min={1}
-            className="input"
-            value={nights}
-            onChange={(e) => setNights(parseInt(e.target.value, 10))}
-          />
-        </div>
-        <div>
-          <label className="label">Budget pro Person (optional, €)</label>
-          <input
-            type="number"
+            inputMode="decimal"
             min={0}
-            className="input"
-            value={budgetPerPerson}
-            onChange={(e) => setBudgetPerPerson(e.target.value)}
+            step={10}
+            placeholder="in Euro"
+            hint="Hilft bei der Auswahl passender Unterkünfte."
+            value={budget}
+            onChange={(e) => setBudget(e.target.value)}
           />
-        </div>
-      </div>
+        </section>
+      )}
 
-      <div>
-        <div className="mb-2 flex items-center justify-between">
-          <label className="label mb-0">Terminoptionen zum Voten</label>
-          <button type="button" onClick={addDateOption} className="btn-secondary text-xs">
-            + Option hinzufügen
-          </button>
-        </div>
-        <div className="space-y-3">
-          {dateOptions.map((option, index) => (
-            <div key={index} className="grid grid-cols-1 gap-2 rounded-lg border border-slate-200 p-3 sm:grid-cols-4">
-              <input
-                className="input sm:col-span-2"
-                placeholder="z.B. Wochenende 12.–14. Jan"
-                value={option.label}
-                onChange={(e) => updateDateOption(index, { label: e.target.value })}
-              />
-              <input
+      {step === 1 && (
+        <section className="card animate-fade-up space-y-6 p-6 sm:p-8" aria-labelledby="step-dates">
+          <div>
+            <h2 id="step-dates" className="text-title2">
+              Wann soll es losgehen?
+            </h2>
+            <p className="mt-1 text-callout text-secondary">
+              Schlage Wochenenden vor – deine Gruppe stimmt anschließend darüber ab.
+            </p>
+          </div>
+
+          <Segmented
+            ariaLabel="Terminart"
+            value={dateMode}
+            onChange={setDateMode}
+            options={[
+              { value: 'multiple_choice', label: 'Wochenenden zur Wahl' },
+              { value: 'fixed', label: 'Fester Zeitraum' },
+            ]}
+          />
+
+          {dateMode === 'multiple_choice' ? (
+            <WeekendPicker selected={weekends} onChange={setWeekends} />
+          ) : (
+            <div className="grid gap-5 sm:grid-cols-2">
+              <Input
+                label="Anreise"
                 type="date"
-                className="input"
-                value={option.startDate}
-                onChange={(e) => updateDateOption(index, { startDate: e.target.value })}
+                min={todayYmd()}
+                value={fixedStart}
+                onChange={(e) => setFixedStart(e.target.value)}
               />
-              <div className="flex gap-2">
-                <input
-                  type="date"
-                  className="input"
-                  value={option.endDate}
-                  onChange={(e) => updateDateOption(index, { endDate: e.target.value })}
-                />
-                {dateOptions.length > 1 && (
-                  <button
-                    type="button"
-                    onClick={() => removeDateOption(index)}
-                    className="shrink-0 text-slate-400 hover:text-red-600"
-                  >
-                    ✕
-                  </button>
-                )}
-              </div>
+              <Input
+                label="Abreise"
+                type="date"
+                min={fixedStart || todayYmd()}
+                value={fixedEnd}
+                error={fixedStart && fixedEnd && fixedEnd <= fixedStart ? 'Die Abreise muss nach der Anreise liegen.' : null}
+                onChange={(e) => setFixedEnd(e.target.value)}
+              />
             </div>
-          ))}
-        </div>
+          )}
+        </section>
+      )}
+
+      {step === 2 && (
+        <section className="card animate-fade-up space-y-6 p-6 sm:p-8" aria-labelledby="step-summary">
+          <div>
+            <h2 id="step-summary" className="text-title2">
+              Alles bereit?
+            </h2>
+            <p className="mt-1 text-callout text-secondary">
+              Nach dem Erstellen erhältst du einen Einladungslink für deine Gruppe.
+            </p>
+          </div>
+
+          <dl className="divide-y divide-line/60 rounded-control bg-grouped px-4 text-callout">
+            <SummaryRow label="Titel">{title.trim()}</SummaryRow>
+            <SummaryRow label="Ort">{location.trim()}</SummaryRow>
+            <SummaryRow label="Unterkunft">{TRIP_TYPE_LABELS[tripType]}</SummaryRow>
+            {budget.trim() && <SummaryRow label="Budget">{budget} € pro Person</SummaryRow>}
+            <SummaryRow label="Termine">
+              {dateMode === 'fixed' ? (
+                formatDateRange(fixedStart, fixedEnd)
+              ) : (
+                <span className="flex flex-wrap justify-end gap-1.5">
+                  {weekends.map((w) => (
+                    <Badge key={w.id} tone="accent">
+                      {formatDateRange(w.startDate, w.endDate)}
+                    </Badge>
+                  ))}
+                </span>
+              )}
+            </SummaryRow>
+            <SummaryRow label="Dauer">{pluralize(nights, 'Nacht', 'Nächte')}</SummaryRow>
+          </dl>
+        </section>
+      )}
+
+      <div className="flex items-center justify-between gap-3">
+        {step > 0 ? (
+          <Button variant="plain" onClick={back} icon={<IconChevronLeft size={18} />} disabled={submitting}>
+            Zurück
+          </Button>
+        ) : (
+          <span />
+        )}
+        {step < 2 ? (
+          <Button size="lg" onClick={next} disabled={step === 0 ? !detailsValid : !datesValid}>
+            Weiter
+          </Button>
+        ) : (
+          <Button size="lg" onClick={create} loading={submitting}>
+            Reise erstellen
+          </Button>
+        )}
       </div>
-
-      {error && <p className="text-sm text-red-600">{error}</p>}
-
-      <button type="submit" disabled={loading} className="btn-primary w-full">
-        {loading ? 'Erstelle Trip…' : 'Trip erstellen & Einladungslink generieren'}
-      </button>
-    </form>
+    </div>
   );
+}
+
+function SummaryRow({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex items-start justify-between gap-6 py-3">
+      <dt className="shrink-0 text-secondary">{label}</dt>
+      <dd className="min-w-0 text-right font-medium">{children}</dd>
+    </div>
+  );
+}
+
+function mostCommon(values: number[]): number | undefined {
+  if (values.length === 0) return undefined;
+  const counts = new Map<number, number>();
+  for (const v of values) counts.set(v, (counts.get(v) ?? 0) + 1);
+  return [...counts.entries()].sort((a, b) => b[1] - a[1] || b[0] - a[0])[0][0];
 }

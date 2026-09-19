@@ -3,6 +3,7 @@ import { z } from 'zod';
 import crypto from 'crypto';
 import { query } from '../db/pool';
 import { Trip } from '../types';
+import { env } from '../config/env';
 import { badRequest, forbidden, notFound } from '../utils/httpError';
 import { computeTripResults, rankAccommodations } from '../services/results.service';
 import { searchBookingAccommodations, AccommodationSearchParams } from '../services/booking.service';
@@ -89,6 +90,7 @@ export async function searchAccommodations(req: Request, res: Response) {
     searchParams,
     topSuggestions: ranked.slice(0, 3),
     allSuggestions: ranked,
+    demo: !env.rapidApiKey,
   });
 }
 
@@ -105,7 +107,7 @@ export async function getCachedAccommodations(req: Request, res: Response) {
   );
 
   if (!result.rows[0]) {
-    return res.json({ topSuggestions: [], allSuggestions: [], cached: false });
+    return res.json({ topSuggestions: [], allSuggestions: [], cached: false, demo: !env.rapidApiKey });
   }
 
   const suggestions = result.rows[0].results as unknown[];
@@ -113,6 +115,7 @@ export async function getCachedAccommodations(req: Request, res: Response) {
     topSuggestions: suggestions.slice(0, 3),
     allSuggestions: suggestions,
     cached: true,
+    demo: !env.rapidApiKey,
     searchedAt: result.rows[0].created_at,
     expiresAt: result.rows[0].expires_at,
   });

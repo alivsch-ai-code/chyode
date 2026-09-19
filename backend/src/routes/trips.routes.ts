@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { asyncHandler } from '../utils/asyncHandler';
-import { requireCreatorAuth, requireParticipantAuth, requireTripCreatorParticipant } from '../middleware/auth';
+import { requireAuth, requireParticipantAuth, requireTripCreatorParticipant } from '../middleware/auth';
 import {
   createTrip,
   listMyTrips,
@@ -8,25 +8,32 @@ import {
   getTripByInviteToken,
   joinTrip,
   closeVoting,
+  reopenVoting,
 } from '../controllers/trips.controller';
 
 const router = Router();
 
-// Ersteller-Verwaltung (JWT-Login)
-router.post('/', requireCreatorAuth, asyncHandler(createTrip));
-router.get('/', requireCreatorAuth, asyncHandler(listMyTrips));
+// Trips des angemeldeten Accounts
+router.post('/', requireAuth, asyncHandler(createTrip));
+router.get('/', requireAuth, asyncHandler(listMyTrips));
 
-// Öffentliche Einladungs-Endpoints (kein Login nötig)
+// Einladungslink: Vorschau ist öffentlich, Beitritt erfordert ein Konto
 router.get('/invite/:inviteToken', asyncHandler(getTripByInviteToken));
-router.post('/invite/:inviteToken/join', asyncHandler(joinTrip));
+router.post('/invite/:inviteToken/join', requireAuth, asyncHandler(joinTrip));
 
-// Trip-scoped Endpoints (Teilnehmer-Session-Token)
+// Trip-scoped Endpoints (nur Mitglieder)
 router.get('/:tripId', requireParticipantAuth, asyncHandler(getTrip));
 router.post(
   '/:tripId/close-voting',
   requireParticipantAuth,
   requireTripCreatorParticipant,
   asyncHandler(closeVoting)
+);
+router.post(
+  '/:tripId/reopen-voting',
+  requireParticipantAuth,
+  requireTripCreatorParticipant,
+  asyncHandler(reopenVoting)
 );
 
 export default router;

@@ -7,14 +7,55 @@
 CREATE EXTENSION IF NOT EXISTS "pgcrypto"; -- für gen_random_uuid()
 
 -- ------------------------------------------------------------
--- users: registrierte Trip-Ersteller (Magic-Link-Auth)
+-- users: Accounts (Einladung durch Admin, Login mit Passwort)
 -- ------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS users (
-  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  email        TEXT UNIQUE NOT NULL,
-  name         TEXT,
-  created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  email           TEXT UNIQUE NOT NULL,
+  name            TEXT,
+  password_hash   TEXT,
+  role            TEXT NOT NULL DEFAULT 'user' CONSTRAINT users_role_check CHECK (role IN ('admin', 'user')),
+  status          TEXT NOT NULL DEFAULT 'active' CONSTRAINT users_status_check CHECK (status IN ('active', 'disabled')),
+  token_version   INTEGER NOT NULL DEFAULT 0,  -- erhöht sich bei Passwortänderung -> alte Sessions ungültig
+  failed_logins   INTEGER NOT NULL DEFAULT 0,
+  locked_until    TIMESTAMPTZ,
+  last_login_at   TIMESTAMPTZ,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_lower ON users (lower(email));
+
+-- ------------------------------------------------------------
+-- user_invites: Admin-Einladungen (Token nur als SHA-256-Hash)
+-- ------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS user_invites (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  email       TEXT NOT NULL,
+  name        TEXT,
+  role        TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('admin', 'user')),
+  token_hash  TEXT UNIQUE NOT NULL,
+  invited_by  UUID REFERENCES users(id) ON DELETE SET NULL,
+  expires_at  TIMESTAMPTZ NOT NULL,
+  used_at     TIMESTAMPTZ,
+  revoked_at  TIMESTAMPTZ,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_invites_email ON user_invites (lower(email));
+
+-- ------------------------------------------------------------
+-- password_resets: Reset-Links (Token nur als SHA-256-Hash)
+-- ------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS password_resets (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  token_hash  TEXT UNIQUE NOT NULL,
+  expires_at  TIMESTAMPTZ NOT NULL,
+  used_at     TIMESTAMPTZ,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_password_resets_user_id ON password_resets (user_id);
 
 -- ------------------------------------------------------------
 -- trips: eine geplante Gruppenreise
@@ -48,17 +89,20 @@ CREATE INDEX IF NOT EXISTS idx_trips_invite_token ON trips(invite_token);
 CREATE TABLE IF NOT EXISTS trip_users (
   id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   trip_id        UUID NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
-  user_id        UUID REFERENCES users(id) ON DELETE SET NULL, -- NULL = anonymer Teilnehmer
+  user_id        UUID REFERENCES users(id) ON DELETE SET NULL, -- NULL nur bei Altdaten (frühere Gäste)
   name           TEXT NOT NULL,
   email          TEXT,
   role           TEXT NOT NULL DEFAULT 'participant'
                  CHECK (role IN ('creator', 'participant')),
-  session_token  TEXT UNIQUE NOT NULL, -- Teilnehmer-Session ohne Passwort
+  session_token  TEXT UNIQUE,          -- veraltet: nur noch für Altdaten, wird nicht mehr genutzt
   joined_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 CREATE INDEX IF NOT EXISTS idx_trip_users_trip_id ON trip_users(trip_id);
 CREATE INDEX IF NOT EXISTS idx_trip_users_session_token ON trip_users(session_token);
+-- ein Account kann pro Trip nur einmal Teilnehmer sein
+CREATE UNIQUE INDEX IF NOT EXISTS idx_trip_users_trip_user
+  ON trip_users (trip_id, user_id) WHERE user_id IS NOT NULL;
 
 -- ------------------------------------------------------------
 -- date_options: zur Auswahl stehende Termine/Wochenenden

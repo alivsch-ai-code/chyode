@@ -1,88 +1,127 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import useSWR from 'swr';
-import { useParams, useRouter } from 'next/navigation';
-import { apiFetch, setParticipantToken } from '@/lib/api';
-import type { Trip, TripUser } from '@shared/types';
+import type { TripStatus, TripType } from '@shared/types';
+import { MountainArt } from '@/components/MountainArt';
+import { Button, LinkButton } from '@/components/ui/Button';
+import { Alert, Badge, PageLoading } from '@/components/ui/Feedback';
+import { IconMapPin, IconUsers } from '@/components/ui/Icons';
+import { ApiError, apiFetch, errorMessage } from '@/lib/api';
+import { useAuth } from '@/lib/auth';
+import { TRIP_TYPE_LABELS, pluralize } from '@/lib/format';
 
-interface InvitePreviewResponse {
-  trip: Pick<Trip, 'id' | 'title' | 'location' | 'trip_type' | 'date_mode' | 'start_date' | 'end_date' | 'nights' | 'status'>;
+interface InvitePreview {
+  trip: {
+    id: string;
+    title: string;
+    location: string;
+    trip_type: TripType;
+    status: TripStatus;
+    nights: number;
+    creator_name: string | null;
+  };
   participantCount: number;
 }
 
-interface JoinResponse {
-  participant: TripUser;
-  trip: Trip;
-}
-
-export default function InviteJoinPage() {
-  const { token } = useParams<{ token: string }>();
+export default function InvitePage({ params }: { params: { token: string } }) {
+  const { token } = params;
   const router = useRouter();
-  const { data, error, isLoading } = useSWR<InvitePreviewResponse>(
-    `/trips/invite/${token}`,
-    () => apiFetch<InvitePreviewResponse>(`/trips/invite/${token}`)
-  );
-
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
+  const { user, loading: authLoading } = useAuth();
+  const { data, error, isLoading } = useSWR<InvitePreview>(`/trips/invite/${encodeURIComponent(token)}`);
   const [joining, setJoining] = useState(false);
   const [joinError, setJoinError] = useState<string | null>(null);
 
-  async function handleJoin(e: React.FormEvent) {
-    e.preventDefault();
-    setJoining(true);
+  async function join() {
     setJoinError(null);
+    setJoining(true);
     try {
-      const result = await apiFetch<JoinResponse>(`/trips/invite/${token}/join`, {
-        method: 'POST',
-        body: { name, email: email || undefined },
-      });
-      setParticipantToken(result.trip.id, result.participant.session_token);
-      router.push(`/invite/${token}/vote`);
+      const result = await apiFetch<{ tripId: string }>(`/trips/invite/${encodeURIComponent(token)}/join`, { method: 'POST' });
+      router.replace(`/trips/${result.tripId}?tab=dates`);
     } catch (err) {
-      setJoinError(err instanceof Error ? err.message : 'Beitritt fehlgeschlagen.');
-    } finally {
+      setJoinError(errorMessage(err));
       setJoining(false);
     }
   }
 
-  if (isLoading) return <p className="text-slate-500">Lädt…</p>;
-  if (error || !data) return <p className="text-red-600">Diese Einladung ist ungültig oder abgelaufen.</p>;
+  if (isLoading || authLoading) return <PageLoading label="Einladung wird geladen …" />;
+
+  if (error || !data) {
+    const notFound = error instanceof ApiError && error.status === 404;
+    return (
+      <div className="mx-auto max-w-narrow pt-8">
+        <Alert tone={notFound ? 'warning' : 'error'} title={notFound ? 'Einladung nicht gefunden' : 'Einladung konnte nicht geladen werden'}>
+          {notFound ? 'Der Link ist ungültig oder die Reise wurde gelöscht. Frage nach einem neuen Link.' : errorMessage(error)}
+        </Alert>
+      </div>
+    );
+  }
 
   const { trip, participantCount } = data;
+  const loginHref = `/login?next=${encodeURIComponent(`/invite/${token}`)}`;
 
   return (
-    <div className="mx-auto max-w-md space-y-6">
-      <div className="card text-center">
-        <h1 className="text-2xl font-bold">{trip.title}</h1>
-        <p className="mt-1 text-slate-600">{trip.location}</p>
-        <p className="mt-2 text-sm text-slate-400">{participantCount} Teilnehmer:innen bereits dabei</p>
-      </div>
+    <div className="mx-auto w-full max-w-narrow animate-fade-up pt-2 sm:pt-8">
+      <div className="card overflow-hidden">
+        <div className="aspect-[2/1] w-full">
+          <MountainArt hue={205} className="h-full w-full" />
+        </div>
+        <div className="space-y-6 p-6 sm:p-8">
+          <div className="text-center">
+            <p className="eyebrow">Einladung</p>
+            <h1 className="mt-1.5 text-title1">{trip.title}</h1>
+            <p className="mt-2 text-callout text-secondary">
+              {trip.creator_name ? `${trip.creator_name} lädt dich ein, gemeinsam zu planen.` : 'Du wurdest zu einer Reise eingeladen.'}
+            </p>
+          </div>
 
-      {trip.status !== 'voting' ? (
-        <p className="text-center text-slate-600">Das Voting für diesen Trip ist bereits geschlossen.</p>
-      ) : (
-        <form onSubmit={handleJoin} className="card space-y-4">
-          <div>
-            <label className="label">Dein Name</label>
-            <input className="input" required value={name} onChange={(e) => setName(e.target.value)} />
-          </div>
-          <div>
-            <label className="label">E-Mail (optional)</label>
-            <input
-              type="email"
-              className="input"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
-          </div>
-          {joinError && <p className="text-sm text-red-600">{joinError}</p>}
-          <button type="submit" disabled={joining} className="btn-primary w-full">
-            {joining ? 'Trete bei…' : 'Beitreten & abstimmen'}
-          </button>
-        </form>
-      )}
+          <ul className="flex flex-wrap justify-center gap-2">
+            <li>
+              <Badge>
+                <IconMapPin size={13} /> {trip.location}
+              </Badge>
+            </li>
+            <li>
+              <Badge>{TRIP_TYPE_LABELS[trip.trip_type]}</Badge>
+            </li>
+            <li>
+              <Badge>
+                <IconUsers size={13} /> {pluralize(participantCount, 'Person', 'Personen')}
+              </Badge>
+            </li>
+          </ul>
+
+          {joinError && <Alert tone="error">{joinError}</Alert>}
+
+          {user ? (
+            trip.status === 'voting' ? (
+              <div className="space-y-3">
+                <Button size="lg" fullWidth loading={joining} onClick={join}>
+                  Reise beitreten
+                </Button>
+                <p className="text-center text-footnote text-secondary">Du trittst als {user.name ?? user.email} bei.</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <Alert tone="info">Die Abstimmung ist beendet. Falls du bereits dabei bist, findest du die Reise unter „Meine Reisen“.</Alert>
+                <LinkButton href="/" variant="plain" size="lg" fullWidth>
+                  Zu meinen Reisen
+                </LinkButton>
+              </div>
+            )
+          ) : (
+            <div className="space-y-3">
+              <LinkButton href={loginHref} size="lg" fullWidth>
+                Anmelden und beitreten
+              </LinkButton>
+              <p className="text-center text-footnote text-secondary">
+                Für die Teilnahme brauchst du ein Konto. Der Zugang erfolgt per Einladung durch einen Administrator.
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

@@ -13,10 +13,10 @@ import { apiFetch, errorMessage } from '@/lib/api';
 import {
   dateFromYmd,
   formatDateRange,
-  formatLongDate,
   nightsBetween,
   pluralize,
   toYmd,
+  weekdayShort,
 } from '@/lib/format';
 import { holidaysBetween, type Weekend } from '@/lib/weekends';
 
@@ -230,7 +230,7 @@ export function DatesTab({
                       ))}
                     </div>
                     <p className="mt-0.5 text-subhead text-secondary">
-                      {formatLongDate(start)} bis {formatLongDate(end)} · {pluralize(nightsBetween(start, end), 'Nacht', 'Nächte')}
+                      {weekdayShort(start)} – {weekdayShort(end)} · {pluralize(nightsBetween(start, end), 'Nacht', 'Nächte')}
                     </p>
 
                     <div className="mt-4 space-y-2">
@@ -246,7 +246,7 @@ export function DatesTab({
                             : `${pluralize(optionVotes.length, 'Zusage', 'Zusagen')} · ${pluralize(totalPeople, 'Person', 'Personen')}`}
                         </p>
                         {optionVotes.length > 0 && (
-                          <ul className="flex -space-x-2" aria-label="Zugesagt haben">
+                          <ul className="flex -space-x-1" aria-label="Zugesagt haben">
                             {optionVotes.slice(0, 5).map((v) => (
                               <li key={v.id} title={`${v.voter_name} (${v.people_count})`} className="rounded-full ring-2 ring-surface">
                                 <Avatar name={v.voter_name} size={26} />

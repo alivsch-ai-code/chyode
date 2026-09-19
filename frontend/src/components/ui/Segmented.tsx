@@ -60,7 +60,7 @@ export function Segmented<T extends string>({
             tabIndex={active ? 0 : -1}
             onClick={() => onChange(option.value)}
             onKeyDown={(e) => onKeyDown(e, index)}
-            className={`flex-1 rounded-full px-4 py-2 text-subhead font-medium transition duration-200 sm:flex-none ${
+            className={`flex-1 whitespace-nowrap rounded-full px-2.5 py-2 text-subhead font-medium transition duration-200 sm:flex-none sm:px-4 ${
               active ? 'bg-surface text-label shadow-[0_1px_3px_rgb(0_0_0/0.15)]' : 'text-secondary hover:text-label'
             }`}
           >

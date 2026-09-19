@@ -51,6 +51,9 @@ const config: Config = {
         footnote: ['0.8125rem', { lineHeight: '1.35', letterSpacing: '-0.003em' }],
         caption: ['0.75rem', { lineHeight: '1.3' }],
       },
+      opacity: {
+        12: '0.12',
+      },
       borderRadius: {
         control: '0.75rem',
         card: '1.25rem',

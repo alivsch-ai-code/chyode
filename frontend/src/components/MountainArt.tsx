@@ -31,9 +31,9 @@ export function MountainArt({ hue, season = 'summer', className = '' }: { hue: n
           <stop offset="1" stopColor={skyBottom} />
         </linearGradient>
       </defs>
+      <rect width="400" height="220" fill={`url(#${gradientId})`} />
+      <circle cx="318" cy="58" r="21" fill={sunColor} opacity="0.92" />
       <g transform={flip ? 'translate(400 0) scale(-1 1)' : undefined}>
-        <rect width="400" height="220" fill={`url(#${gradientId})`} />
-        <circle cx="318" cy="58" r="21" fill={sunColor} opacity="0.92" />
         <path d="M0 170 60 100 100 130 160 60 220 135 270 90 330 140 400 100V220H0Z" fill={back} />
         <path d="M160 60 146 82l8-4 6 8 7-8 8 5Z" fill="#fff" opacity="0.92" />
         <path d="M270 90 259 106l6-3 5 6 6-6 6 4Z" fill="#fff" opacity="0.85" />

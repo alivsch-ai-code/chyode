@@ -70,7 +70,7 @@ docker compose exec -T db psql -U postgres -d tripplanner < database/migrations/
 
 ```bash
 cd backend
-cp .env.example .env   # DATABASE_URL, JWT_SECRET, SMTP_* anpassen
+# backend/.env anlegen (Variablen siehe docs/CONFIGURATION.md)
 npm install
 npm run dev             # http://localhost:4000
 ```
@@ -94,7 +94,8 @@ Frontend, `/api` → Backend).
 ### 4. Alles zusammen mit Docker
 
 ```bash
-cp .env.example .env    # JWT_SECRET (Pflicht), Domain, SMTP-Zugang eintragen
+# .env neben docker-compose.yml anlegen: JWT_SECRET (Pflicht), Domain, SMTP-Zugang
+# (Variablen und Beispiel siehe docs/CONFIGURATION.md)
 docker compose up --build
 ```
 
@@ -105,17 +106,8 @@ nur an `127.0.0.1` gebunden. `NEXT_PUBLIC_API_URL` wird beim **Build** eingebran
 ## E-Mail-Versand (IONOS)
 
 Einladungen und Passwort-Resets werden über ein IONOS-Postfach versendet (`smtp.ionos.de`,
-Port 587/STARTTLS). In der `.env` des Servers setzen — nie ins Repository committen:
-
-```
-SMTP_HOST=smtp.ionos.de
-SMTP_PORT=587
-SMTP_USER=info@your-domain.example
-SMTP_PASS=<App-Passwort des Postfachs>
-MAIL_FROM=info@your-domain.example
-```
-
-`MAIL_FROM` muss die Adresse des Postfachs sein.
+Port 587/STARTTLS). Die Zugangsdaten gehören ausschließlich in die `.env` auf dem Server – nie
+ins Repository. Einrichtung, Variablen und Test: [docs/CONFIGURATION.md](docs/CONFIGURATION.md).
 
 ## Externe APIs (optional)
 
@@ -130,9 +122,10 @@ darauf hin). Für echte Ergebnisse in der `.env` setzen:
 `/impressum` und `/datenschutz` sind **Vorlagen mit Platzhaltern** und müssen vor dem Livegang
 vom Betreiber ausgefüllt und geprüft werden.
 
-## API-Dokumentation
+## Dokumentation
 
-Siehe [docs/API.md](docs/API.md) für alle Endpoints inkl. Beispiel-Payloads.
+- [docs/CONFIGURATION.md](docs/CONFIGURATION.md) — Umgebungsvariablen, Docker-`.env`, IONOS-Mail
+- [docs/API.md](docs/API.md) — alle Endpoints inkl. Beispiel-Payloads
 
 ## Datenbankschema
 

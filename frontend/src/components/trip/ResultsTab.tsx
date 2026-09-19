@@ -1,14 +1,57 @@
 'use client';
 
+import { useState } from 'react';
 import useSWR from 'swr';
-import type { TripResults } from '@shared/types';
+import type { BudgetStats, ChoiceCount, TripResults } from '@shared/types';
+import { Button } from '@/components/ui/Button';
 import { Alert, Badge, EmptyState, ProgressBar, Skeleton } from '@/components/ui/Feedback';
-import { IconTrophy } from '@/components/ui/Icons';
-import { errorMessage } from '@/lib/api';
-import { formatDateRange, formatLongDate, pluralize, toYmd } from '@/lib/format';
+import { IconEyeLock, IconTrophy } from '@/components/ui/Icons';
+import { useToast } from '@/components/ui/Toast';
+import { ACCOMMODATION_TYPES, EXPERIENCES, type CatalogItem } from '@/lib/catalog';
+import { apiFetch, errorMessage } from '@/lib/api';
+import { formatDateRange, formatLongDate, formatMoney, pluralize, toYmd } from '@/lib/format';
 
-export function ResultsTab({ tripId }: { tripId: string }) {
-  const { data, error, isLoading } = useSWR<{ results: TripResults }>(`/trips/${tripId}/results`);
+export function ResultsTab({
+  tripId,
+  isCreator,
+  resultsReleased,
+  progress,
+  onReleaseChanged,
+}: {
+  tripId: string;
+  isCreator: boolean;
+  resultsReleased: boolean;
+  progress?: { voted: number; total: number };
+  onReleaseChanged: () => Promise<unknown>;
+}) {
+  const { toast } = useToast();
+  const canSee = isCreator || resultsReleased;
+  const { data, error, isLoading } = useSWR<{ results: TripResults }>(canSee ? `/trips/${tripId}/results` : null);
+  const [busy, setBusy] = useState(false);
+
+  async function setReleased(release: boolean) {
+    setBusy(true);
+    try {
+      await apiFetch(`/trips/${tripId}/${release ? 'release-results' : 'hide-results'}`, { method: 'POST' });
+      await onReleaseChanged();
+      toast(release ? 'Ergebnis für alle freigegeben' : 'Freigabe zurückgenommen', 'success');
+    } catch (err) {
+      toast(errorMessage(err), 'error');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!canSee) {
+    return (
+      <div className="card">
+        <EmptyState icon={<IconEyeLock size={28} />} title="Das Ergebnis ist noch nicht freigegeben">
+          Sobald alle abgestimmt haben und der Ersteller die Auswertung freigibt, siehst du hier Termin, Budget und Wünsche der
+          Gruppe – und bekommst eine E-Mail.
+        </EmptyState>
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (
@@ -29,16 +72,51 @@ export function ResultsTab({ tripId }: { tripId: string }) {
     <div className="space-y-8">
       <div>
         <h2 className="text-title2">Ergebnis</h2>
-        <p className="mt-1 text-callout text-secondary">So sieht die Gruppe die Termine und Wünsche.</p>
+        <p className="mt-1 text-callout text-secondary">So sieht die Gruppe Termine, Budget und Wünsche.</p>
       </div>
 
+      {isCreator && (
+        <section
+          className={`rounded-card p-5 sm:p-6 ${resultsReleased ? 'bg-success/10' : 'bg-warning/10'}`}
+          aria-labelledby="release-heading"
+        >
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="min-w-0">
+              <h3 id="release-heading" className="text-headline">
+                {resultsReleased ? 'Für alle Teilnehmer freigegeben' : 'Nur für dich sichtbar'}
+              </h3>
+              <p className="mt-1 text-subhead text-secondary">
+                {resultsReleased
+                  ? 'Alle Teilnehmer sehen dieses Ergebnis. Sobald alle abgestimmt haben, erhalten sie eine E-Mail.'
+                  : 'Teilnehmer sehen das Ergebnis erst, wenn du es freigibst. Danach bekommen alle eine E-Mail, sobald jeder abgestimmt hat.'}
+              </p>
+              {progress && (
+                <p className="mt-1 text-subhead text-secondary">
+                  {progress.voted} von {progress.total} haben abgestimmt.
+                </p>
+              )}
+            </div>
+            {resultsReleased ? (
+              <Button variant="plain" loading={busy} onClick={() => setReleased(false)}>
+                Freigabe zurücknehmen
+              </Button>
+            ) : (
+              <Button loading={busy} onClick={() => setReleased(true)}>
+                Für alle freigeben
+              </Button>
+            )}
+          </div>
+        </section>
+      )}
+
       <section className="card p-6 sm:p-8" aria-labelledby="participation">
-        <div className="flex items-baseline justify-between gap-3">
+        <div className="flex flex-wrap items-baseline justify-between gap-3">
           <h3 id="participation" className="text-headline">
             Beteiligung
           </h3>
           <p className="text-subhead text-secondary">
-            {results.votedParticipants} von {results.totalParticipants} haben abgestimmt
+            {results.votedParticipants} von {results.totalParticipants} haben abgestimmt · {results.preferencesSubmitted} haben
+            Präferenzen angegeben
           </p>
         </div>
         <div className="mt-3">
@@ -118,9 +196,38 @@ export function ResultsTab({ tripId }: { tripId: string }) {
         </section>
       )}
 
+      <section className="card space-y-6 p-6 sm:p-8" aria-labelledby="budget-heading">
+        <div>
+          <h3 id="budget-heading" className="text-headline">
+            Budget der Gruppe
+          </h3>
+          <p className="mt-1 text-subhead text-secondary">Höchstbeträge pro Person für den gesamten Aufenthalt.</p>
+        </div>
+        <div className="grid gap-6 lg:grid-cols-3">
+          <BudgetBlock title="Übernachtung" stats={results.budget.accommodation} />
+          <BudgetBlock title="Aktivitäten" stats={results.budget.activities} />
+          <BudgetBlock title="Gesamt" stats={results.budget.total} highlight />
+        </div>
+      </section>
+
+      <ChoiceRanking
+        title="Gewünschte Erlebnisse"
+        emptyText="Noch keine Erlebniswünsche angegeben."
+        items={EXPERIENCES}
+        counts={results.experiences}
+        participants={results.preferencesSubmitted}
+      />
+      <ChoiceRanking
+        title="Bevorzugte Unterkunftsarten"
+        emptyText="Noch keine Unterkunftswünsche angegeben."
+        items={ACCOMMODATION_TYPES}
+        counts={results.accommodationTypes}
+        participants={results.preferencesSubmitted}
+      />
+
       <section className="card p-6 sm:p-8" aria-labelledby="wishes">
         <h3 id="wishes" className="text-headline">
-          Häufigste Wünsche
+          Häufigste Wünsche aus den Notizen
         </h3>
         {results.topWishes.length === 0 ? (
           <p className="mt-2 text-callout text-secondary">
@@ -140,5 +247,114 @@ export function ResultsTab({ tripId }: { tripId: string }) {
         )}
       </section>
     </div>
+  );
+}
+
+function BudgetBlock({ title, stats, highlight = false }: { title: string; stats: BudgetStats; highlight?: boolean }) {
+  const hasData = stats.count > 0 && stats.median !== null && stats.min !== null && stats.max !== null;
+  const span = hasData ? Math.max(stats.max! - stats.min!, 1) : 1;
+  const position = (value: number) => (hasData ? `${((value - stats.min!) / span) * 100}%` : '0%');
+
+  return (
+    <div className={`rounded-control p-5 ${highlight ? 'bg-accent/10' : 'bg-grouped'}`}>
+      <div className="flex items-baseline justify-between gap-2">
+        <h4 className="text-subhead font-semibold">{title}</h4>
+        <span className="text-footnote text-secondary">{pluralize(stats.count, 'Angabe', 'Angaben')}</span>
+      </div>
+
+      {hasData ? (
+        <>
+          <p className="mt-3 text-title2 tabular-nums">{formatMoney(stats.median!)}</p>
+          <p className="text-footnote text-secondary">Median – die Hälfte der Gruppe möchte höchstens so viel ausgeben</p>
+
+          <div className="relative mt-5 h-2 rounded-full bg-fill/20" aria-hidden="true">
+            <span
+              className="absolute top-1/2 h-4 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-accent"
+              style={{ left: position(stats.median!) }}
+            />
+            {stats.average !== null && (
+              <span
+                className="absolute top-1/2 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-surface bg-warning"
+                style={{ left: position(stats.average) }}
+              />
+            )}
+          </div>
+
+          <dl className="mt-3 grid grid-cols-3 gap-2 text-center">
+            <Stat label="Minimum" value={formatMoney(stats.min!)} />
+            <Stat label="Durchschnitt" value={stats.average !== null ? formatMoney(stats.average) : '–'} />
+            <Stat label="Maximum" value={formatMoney(stats.max!)} />
+          </dl>
+        </>
+      ) : (
+        <p className="mt-3 text-callout text-secondary">Noch keine Angaben.</p>
+      )}
+    </div>
+  );
+}
+
+function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <dt className="text-caption text-secondary">{label}</dt>
+      <dd className="text-subhead font-semibold tabular-nums">{value}</dd>
+    </div>
+  );
+}
+
+function ChoiceRanking<K extends string>({
+  title,
+  items,
+  counts,
+  participants,
+  emptyText,
+}: {
+  title: string;
+  items: CatalogItem<K>[];
+  counts: ChoiceCount<K>[];
+  participants: number;
+  emptyText: string;
+}) {
+  const max = Math.max(1, participants, ...counts.map((c) => c.count));
+  const lookup = new Map(items.map((item) => [item.key, item]));
+
+  return (
+    <section className="card p-6 sm:p-8" aria-label={title}>
+      <h3 className="text-headline">{title}</h3>
+      {counts.length === 0 ? (
+        <p className="mt-2 text-callout text-secondary">{emptyText}</p>
+      ) : (
+        <ol className="mt-5 space-y-4">
+          {counts.map((choice, index) => {
+            const item = lookup.get(choice.key);
+            if (!item) return null;
+            const Icon = item.icon;
+            return (
+              <li key={choice.key}>
+                <div className="mb-1.5 flex items-center justify-between gap-3">
+                  <p className="flex items-center gap-2.5 text-callout font-medium">
+                    <span className="flex h-7 w-7 items-center justify-center rounded-full bg-accent/10 text-accent">
+                      <Icon size={15} />
+                    </span>
+                    {item.label}
+                  </p>
+                  <p className="shrink-0 text-subhead text-secondary tabular-nums">{pluralize(choice.count, 'Stimme', 'Stimmen')}</p>
+                </div>
+                <div
+                  role="img"
+                  aria-label={`${choice.count} von ${max} Teilnehmern`}
+                  className="h-2.5 overflow-hidden rounded-full bg-fill/15"
+                >
+                  <div
+                    className={`h-full rounded-full transition-[width] duration-500 ${index === 0 ? 'bg-accent' : 'bg-accent/45'}`}
+                    style={{ width: `${(choice.count / max) * 100}%` }}
+                  />
+                </div>
+              </li>
+            );
+          })}
+        </ol>
+      )}
+    </section>
   );
 }

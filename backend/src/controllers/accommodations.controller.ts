@@ -4,8 +4,9 @@ import crypto from 'crypto';
 import { query } from '../db/pool';
 import { Trip } from '../types';
 import { env } from '../config/env';
+import { assertResultsAccess } from '../services/access.service';
 import { badRequest, forbidden, notFound } from '../utils/httpError';
-import { computeTripResults, rankAccommodations } from '../services/results.service';
+import { computeTripResults, experienceKeywords, rankAccommodations } from '../services/results.service';
 import { searchBookingAccommodations, AccommodationSearchParams } from '../services/booking.service';
 import { searchAirbnbAccommodations } from '../services/airbnb.service';
 import { getDistancesKm } from '../services/googleMaps.service';
@@ -37,6 +38,8 @@ export async function searchAccommodations(req: Request, res: Response) {
   if (!trip) throw notFound('Trip nicht gefunden');
 
   const results = await computeTripResults(tripId);
+  // Wünsche aus Notizen plus Ausstattung, die sich aus den beliebtesten Erlebniswünschen ergibt
+  const wishes = [...results.topWishes, ...experienceKeywords(results.experiences)];
 
   const { checkIn, checkOut, totalPeople } = resolveSearchDates(trip, results.topDateOption, trip.nights);
 
@@ -45,7 +48,7 @@ export async function searchAccommodations(req: Request, res: Response) {
     checkIn,
     checkOut,
     adults: totalPeople,
-    amenities: results.topWishes.map((w) => w.keyword),
+    amenities: [...new Set(wishes.map((w) => w.keyword))],
     maxPricePerNight: parsed.data.maxPricePerNight,
   };
 
@@ -72,8 +75,9 @@ export async function searchAccommodations(req: Request, res: Response) {
   const ranked = rankAccommodations({
     trip,
     suggestions: combined,
-    wishes: results.topWishes,
+    wishes,
     totalPeople,
+    budgetPerPerson: results.budget.accommodation.median,
   });
 
   const expiresAt = new Date(Date.now() + CACHE_TTL_HOURS * 60 * 60 * 1000);
@@ -98,6 +102,7 @@ export async function searchAccommodations(req: Request, res: Response) {
 export async function getCachedAccommodations(req: Request, res: Response) {
   const { tripId } = req.params;
   if (req.participant!.tripId !== tripId) throw forbidden();
+  await assertResultsAccess(req.participant!);
 
   const result = await query<{ results: unknown; created_at: string; expires_at: string }>(
     `SELECT results, created_at, expires_at FROM search_results_cache

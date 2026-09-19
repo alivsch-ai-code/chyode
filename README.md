@@ -26,10 +26,23 @@ abstimmen, Wünsche notieren, Ideen für die Berge entdecken und passende Unterk
 3. Jedes Konto kann **Reisen erstellen** (Titel, Ort, Art, Budget) und dafür im
    **Wochenend-Picker** gezielt Wochenenden auswählen (Fr–So, Sa–So, Do–So, Fr–Mo; bundesweite
    Feiertage werden markiert). Der Einladungslink der Reise wird mit der Gruppe geteilt.
-4. Mitglieder stimmen über Termine ab (inkl. Personenanzahl), hinterlassen Wünsche und
-   Ideen und sehen das Ergebnis. Der Ersteller beendet die Abstimmung und startet die
-   **Unterkunftssuche**. Ein Tab mit kuratierten **Berg-Ideen** (nach Jahreszeit und Wünschen
-   sortiert, mit Google-Maps-Links) liefert zusätzliche Inspiration.
+4. Mitglieder stimmen über Termine ab (inkl. Personenanzahl) – oder schlagen im **Kalender** (mit
+   Kalenderwochen) einen eigenen Zeitraum vor – und geben ihre **Präferenzen** an: Höchstbudget
+   für Übernachtung und Aktivitäten, gewünschte Erlebnisse und Unterkunftsarten. Dazu kommen
+   Notizen mit Wünschen und Ideen.
+5. Die **Auswertung** (Favorit, Budget-Statistik mit Median/Durchschnitt/Min/Max, Erlebnis- und
+   Unterkunftswünsche) sieht der Ersteller sofort, Teilnehmer erst, wenn er sie **freigibt**.
+   Sobald das Ergebnis freigegeben ist und alle abgestimmt haben, bekommen alle eine E-Mail.
+6. Der Ersteller startet die **Unterkunftssuche**; ein Tab mit kuratierten **Berg-Ideen** (nach
+   Jahreszeit und Wünschen sortiert, mit Google-Maps-Links) liefert zusätzliche Inspiration.
+
+## Datenschutz
+
+Datensparsam by Design: kein Tracking, kein Zugriffsprotokoll mit IP-Adressen, nur ein technisch
+notwendiger Sitzungs-Cookie. Reisedaten werden automatisch gelöscht (Standard: 7 Tage nach Ende
+der Abstimmung, spätestens 90 Tage nach dem Erstellen); Reise und Konto lassen sich jederzeit
+selbst löschen. Details: Seite `/datenschutz`, Konfiguration: [docs/CONFIGURATION.md](docs/CONFIGURATION.md),
+Tests: [tests/README.md](tests/README.md).
 
 ## Erster Start (Administrator anlegen)
 

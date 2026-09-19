@@ -13,7 +13,7 @@ export class ApiError extends Error {
 export const UNAUTHORIZED_EVENT = 'tp:unauthorized';
 
 interface RequestOptions {
-  method?: 'GET' | 'POST' | 'PATCH' | 'DELETE';
+  method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   body?: unknown;
 }
 

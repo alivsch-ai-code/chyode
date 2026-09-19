@@ -29,6 +29,22 @@ export interface Weekend {
   label: string;
   /** Bundesweite Feiertage, die in das Wochenende fallen. */
   holidays: string[];
+  /** true bei frei im Kalender gewähltem Zeitraum (kein Standard-Wochenende) */
+  custom?: boolean;
+}
+
+/** Baut einen frei gewählten Zeitraum (mindestens 1 Nacht) als Terminoption. */
+export function customRange(startDate: string, endDate: string): Weekend {
+  return {
+    id: `${startDate}_${endDate}`,
+    saturday: startDate,
+    startDate,
+    endDate,
+    nights: nightsBetween(startDate, endDate),
+    label: `Eigener Zeitraum ${formatDateRange(startDate, endDate)}`,
+    holidays: holidaysBetween(startDate, endDate),
+    custom: true,
+  };
 }
 
 export interface WeekendMonthGroup {

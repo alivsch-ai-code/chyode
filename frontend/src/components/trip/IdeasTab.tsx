@@ -32,9 +32,10 @@ function preferredTags(notes: Note[]): IdeaTag[] {
 
 const SEASON_OPTIONS = (Object.keys(SEASON_LABELS) as Season[]).map((value) => ({ value, label: SEASON_LABELS[value] }));
 
-export function IdeasTab({ tripId }: { tripId: string }) {
+export function IdeasTab({ tripId, canSeeResults }: { tripId: string; canSeeResults: boolean }) {
   const options = useSWR<{ dateOptions: DateOption[] }>(`/trips/${tripId}/date-options`);
-  const results = useSWR<{ results: TripResults }>(`/trips/${tripId}/results`);
+  // Der Favorit ist Teil der Auswertung: Teilnehmer bekommen ihn erst nach der Freigabe als Bezugstermin
+  const results = useSWR<{ results: TripResults }>(canSeeResults ? `/trips/${tripId}/results` : null);
   const notes = useSWR<{ notes: Note[] }>(`/trips/${tripId}/notes`);
   const [chosenSeason, setChosenSeason] = useState<Season | null>(null);
 
@@ -61,7 +62,7 @@ export function IdeasTab({ tripId }: { tripId: string }) {
         <h2 className="text-title2">Ideen für die Berge</h2>
         <p className="mt-1 text-callout text-secondary">
           {reference
-            ? `Passend zu ${reference.isTop ? 'eurem Favoriten' : 'dem ersten Termin'} (${formatDateRange(reference.start, reference.end)}) – sortiert nach Jahreszeit und euren Wünschen.`
+            ? `Passend zu ${reference.isTop ? 'eurem Favoriten' : 'dem ersten Termin'} (${formatDateRange(reference.start, reference.end)}) – sortiert nach Jahreszeit und deinen Wünschen.`
             : 'Beliebte Ziele nach Jahreszeit – sortiert nach euren Wünschen.'}
         </p>
       </div>

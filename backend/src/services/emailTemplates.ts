@@ -194,6 +194,48 @@ export function passwordResetEmail(params: {
   return { subject: `Passwort zurücksetzen – ${env.appName}`, html, text };
 }
 
+export function resultsReadyEmail(params: {
+  name: string | null;
+  tripTitle: string;
+  link: string;
+  favorite: string | null;
+}): EmailContent {
+  const { name, tripTitle, link, favorite } = params;
+  const title = escapeHtml(tripTitle);
+
+  const paragraphs = [
+    name ? `Hallo ${escapeHtml(name)},` : 'Hallo,',
+    `alle haben abgestimmt – das Ergebnis für <strong>„${title}“</strong> steht fest!`,
+  ];
+  if (favorite) paragraphs.push(`Der Favorit der Gruppe: <strong>${escapeHtml(favorite)}</strong>.`);
+  paragraphs.push(
+    'Schaut euch Termin, Budget und Wünsche der Gruppe in Ruhe an und besprecht in der Gruppe, wie es weitergeht. Viel Spaß beim gemeinsamen Feiern und Treffen!'
+  );
+
+  const html = renderLayout({
+    preheader: `Das Ergebnis für „${tripTitle}“ steht fest.`,
+    heading: 'Das Ergebnis steht fest',
+    paragraphs,
+    button: { label: 'Ergebnis ansehen', url: link },
+  });
+
+  const text = [
+    name ? `Hallo ${name},` : 'Hallo,',
+    '',
+    `alle haben abgestimmt – das Ergebnis für „${tripTitle}“ steht fest!`,
+    favorite ? `Der Favorit der Gruppe: ${favorite}.` : '',
+    '',
+    'Schaut euch Termin, Budget und Wünsche der Gruppe in Ruhe an und besprecht in der Gruppe, wie es weitergeht.',
+    'Viel Spaß beim gemeinsamen Feiern und Treffen!',
+    '',
+    `Ergebnis ansehen: ${link}`,
+  ]
+    .filter((line, index, all) => line !== '' || all[index - 1] !== '')
+    .join('\n');
+
+  return { subject: `Das Ergebnis für „${tripTitle}“ steht fest – ${env.appName}`, html, text };
+}
+
 export function passwordChangedEmail(params: { name: string | null }): EmailContent {
   const html = renderLayout({
     preheader: 'Dein Passwort wurde geändert.',

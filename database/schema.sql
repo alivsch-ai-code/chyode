@@ -84,7 +84,8 @@ CREATE TABLE IF NOT EXISTS trips (
   title               TEXT NOT NULL,
   location            TEXT NOT NULL,
   trip_type           TEXT NOT NULL DEFAULT 'other'
-                       CHECK (trip_type IN ('hut', 'wellness', 'hotel', 'other')),
+                       CONSTRAINT trips_trip_type_check
+                       CHECK (trip_type IN ('hut', 'chalet', 'hotel', 'wellness', 'apartment', 'glamping', 'other')),
   date_mode           TEXT NOT NULL DEFAULT 'multiple_choice'
                        CHECK (date_mode IN ('fixed', 'multiple_choice')),
   start_date          DATE,               -- gesetzt wenn date_mode = 'fixed'
@@ -94,6 +95,9 @@ CREATE TABLE IF NOT EXISTS trips (
   invite_token        TEXT UNIQUE NOT NULL,
   status              TEXT NOT NULL DEFAULT 'voting'
                        CHECK (status IN ('voting', 'closed', 'booked')),
+  results_released_at TIMESTAMPTZ,        -- solange NULL, sehen nur Ersteller die Auswertung
+  results_notified_at TIMESTAMPTZ,        -- Teilnehmer wurden per Mail über das Ergebnis informiert
+  voting_closed_at    TIMESTAMPTZ,        -- Beginn der automatischen Löschfrist
   created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at          TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -131,10 +135,28 @@ CREATE TABLE IF NOT EXISTS date_options (
   label        TEXT NOT NULL,          -- z. B. "Wochenende 12.–14. Jan"
   start_date   DATE NOT NULL,
   end_date     DATE NOT NULL,
+  created_by   UUID REFERENCES trip_users(id) ON DELETE SET NULL, -- Vorschlagender (NULL = Altdaten)
   created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 CREATE INDEX IF NOT EXISTS idx_date_options_trip_id ON date_options(trip_id);
+
+-- ------------------------------------------------------------
+-- participant_preferences: Budget, Erlebniswünsche und Unterkunftsarten je Teilnehmer
+-- ------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS participant_preferences (
+  id                    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  trip_id               UUID NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
+  trip_user_id          UUID NOT NULL UNIQUE REFERENCES trip_users(id) ON DELETE CASCADE,
+  budget_accommodation  NUMERIC(10, 2) CHECK (budget_accommodation >= 0),
+  budget_activities     NUMERIC(10, 2) CHECK (budget_activities >= 0),
+  experiences           TEXT[] NOT NULL DEFAULT '{}',
+  accommodation_types   TEXT[] NOT NULL DEFAULT '{}',
+  created_at            TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at            TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_participant_preferences_trip_id ON participant_preferences (trip_id);
 
 -- ------------------------------------------------------------
 -- votes: Stimmen der Teilnehmer für Terminoptionen

@@ -2,14 +2,16 @@
 
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-import type { Trip, TripType } from '@shared/types';
+import type { AccommodationTypeKey, Trip } from '@shared/types';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Field';
 import { Alert, Badge } from '@/components/ui/Feedback';
 import { IconCheck, IconChevronLeft } from '@/components/ui/Icons';
+import { ChoiceCards } from '@/components/ui/ChoiceCards';
 import { Segmented } from '@/components/ui/Segmented';
 import { WeekendPicker } from '@/components/WeekendPicker';
 import { apiFetch, errorMessage } from '@/lib/api';
+import { ACCOMMODATION_TYPES } from '@/lib/catalog';
 import { TRIP_TYPE_LABELS, formatDateRange, nightsBetween, pluralize } from '@/lib/format';
 import { todayYmd, type Weekend } from '@/lib/weekends';
 
@@ -23,8 +25,7 @@ export function TripForm() {
   const [step, setStep] = useState<Step>(0);
   const [title, setTitle] = useState('');
   const [location, setLocation] = useState('');
-  const [tripType, setTripType] = useState<TripType>('hut');
-  const [budget, setBudget] = useState('');
+  const [tripType, setTripType] = useState<AccommodationTypeKey>('hut');
   const [dateMode, setDateMode] = useState<DateMode>('multiple_choice');
   const [weekends, setWeekends] = useState<Weekend[]>([]);
   const [fixedStart, setFixedStart] = useState('');
@@ -59,7 +60,6 @@ export function TripForm() {
     setError(null);
     setSubmitting(true);
     try {
-      const budgetNumber = budget.trim() ? Number(budget.replace(',', '.')) : undefined;
       const result = await apiFetch<{ trip: Trip }>('/trips', {
         method: 'POST',
         body: {
@@ -68,7 +68,6 @@ export function TripForm() {
           tripType,
           dateMode,
           nights,
-          budgetPerPerson: budgetNumber && budgetNumber > 0 ? budgetNumber : undefined,
           ...(dateMode === 'fixed'
             ? { startDate: fixedStart, endDate: fixedEnd }
             : {
@@ -132,29 +131,12 @@ export function TripForm() {
             onChange={(e) => setLocation(e.target.value)}
           />
           <div>
-            <p className="mb-2 text-subhead font-medium">Art der Unterkunft</p>
-            <Segmented
-              ariaLabel="Art der Unterkunft"
-              value={tripType}
-              onChange={setTripType}
-              options={(Object.keys(TRIP_TYPE_LABELS) as TripType[]).map((value) => ({
-                value,
-                label: TRIP_TYPE_LABELS[value],
-              }))}
-            />
+            <p className="text-subhead font-medium">Welche Unterkunft schwebt dir vor?</p>
+            <p className="mb-3 mt-0.5 text-footnote text-secondary">
+              Nur ein Vorschlag – die Gruppe gibt später ihre eigenen Präferenzen an.
+            </p>
+            <ChoiceCards legend="Art der Unterkunft" items={ACCOMMODATION_TYPES} value={tripType} onChange={setTripType} />
           </div>
-          <Input
-            label="Budget pro Person"
-            optional
-            type="number"
-            inputMode="decimal"
-            min={0}
-            step={10}
-            placeholder="in Euro"
-            hint="Hilft bei der Auswahl passender Unterkünfte."
-            value={budget}
-            onChange={(e) => setBudget(e.target.value)}
-          />
         </section>
       )}
 
@@ -218,7 +200,6 @@ export function TripForm() {
             <SummaryRow label="Titel">{title.trim()}</SummaryRow>
             <SummaryRow label="Ort">{location.trim()}</SummaryRow>
             <SummaryRow label="Unterkunft">{TRIP_TYPE_LABELS[tripType]}</SummaryRow>
-            {budget.trim() && <SummaryRow label="Budget">{budget} € pro Person</SummaryRow>}
             <SummaryRow label="Termine">
               {dateMode === 'fixed' ? (
                 formatDateRange(fixedStart, fixedEnd)

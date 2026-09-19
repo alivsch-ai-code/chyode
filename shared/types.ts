@@ -3,7 +3,18 @@
  * (Das Frontend importiert diese Datei über den TS-Pfad-Alias "@shared/*".)
  */
 
-export type TripType = 'hut' | 'wellness' | 'hotel' | 'other';
+export type TripType = 'hut' | 'chalet' | 'hotel' | 'wellness' | 'apartment' | 'glamping' | 'other';
+export type AccommodationTypeKey = Exclude<TripType, 'other'>;
+export type ExperienceKey =
+  | 'nature'
+  | 'wellness'
+  | 'winter'
+  | 'culinary'
+  | 'adventure'
+  | 'culture'
+  | 'water'
+  | 'social'
+  | 'calm';
 export type DateMode = 'fixed' | 'multiple_choice';
 export type TripStatus = 'voting' | 'closed' | 'booked';
 export type ParticipantRole = 'creator' | 'participant';
@@ -23,6 +34,9 @@ export interface Trip {
   budget_per_person: string | null;
   invite_token: string;
   status: TripStatus;
+  results_released_at: string | null;
+  results_notified_at: string | null;
+  voting_closed_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -82,6 +96,12 @@ export interface TripDetailResponse {
   participants: TripParticipant[];
   myRole: ParticipantRole;
   myParticipantId: string;
+  /** true, sobald der Ersteller die Auswertung für Teilnehmer freigegeben hat */
+  resultsReleased: boolean;
+  /** true, sobald die Ergebnis-Mail an alle Teilnehmer versendet wurde */
+  resultsNotified: boolean;
+  /** Abstimmungsfortschritt – nur für den Ersteller */
+  progress?: { voted: number; total: number };
   inviteLink: string;
 }
 
@@ -91,6 +111,19 @@ export interface DateOption {
   label: string;
   start_date: string;
   end_date: string;
+  created_by?: string | null;
+  /** Name des Vorschlagenden (nur in der Terminliste) */
+  proposed_by_name?: string | null;
+  proposed_by_creator?: boolean | null;
+}
+
+/** Eigene Präferenzen eines Teilnehmers (Höchstbeträge pro Person in Euro). */
+export interface MyPreferences {
+  budgetAccommodation: number | null;
+  budgetActivities: number | null;
+  experiences: ExperienceKey[];
+  accommodationTypes: AccommodationTypeKey[];
+  updatedAt: string;
 }
 
 export interface Vote {
@@ -143,10 +176,27 @@ export interface WishFrequency {
   category: string;
 }
 
+export interface BudgetStats {
+  count: number;
+  median: number | null;
+  average: number | null;
+  min: number | null;
+  max: number | null;
+}
+
+export interface ChoiceCount<K extends string = string> {
+  key: K;
+  count: number;
+}
+
 export interface TripResults {
   topDateOption: DateOptionResult | null;
   dateOptionRanking: DateOptionResult[];
   topWishes: WishFrequency[];
+  budget: { accommodation: BudgetStats; activities: BudgetStats; total: BudgetStats };
+  experiences: ChoiceCount<ExperienceKey>[];
+  accommodationTypes: ChoiceCount<AccommodationTypeKey>[];
+  preferencesSubmitted: number;
   totalParticipants: number;
   votedParticipants: number;
 }

@@ -5,6 +5,7 @@ import { Trip, TripUser } from '../types';
 import { badRequest, forbidden, notFound } from '../utils/httpError';
 import { generateToken } from '../utils/tokens';
 import { env } from '../config/env';
+import { notifyResultsIfReadySafe } from '../services/notification.service';
 
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Datum muss das Format JJJJ-MM-TT haben');
 
@@ -19,7 +20,7 @@ export const dateOptionInputSchema = z
 const createTripSchema = z.object({
   title: z.string().trim().min(1, 'Bitte gib einen Titel ein').max(200),
   location: z.string().trim().min(1, 'Bitte gib eine Region oder einen Ort ein').max(200),
-  tripType: z.enum(['hut', 'wellness', 'hotel', 'other']).default('other'),
+  tripType: z.enum(['hut', 'chalet', 'hotel', 'wellness', 'apartment', 'glamping', 'other']).default('other'),
   dateMode: z.enum(['fixed', 'multiple_choice']).default('multiple_choice'),
   startDate: isoDate.optional(),
   endDate: isoDate.optional(),
@@ -72,21 +73,21 @@ export async function createTrip(req: Request, res: Response) {
     );
     const created = tripResult.rows[0];
 
+    // Der Ersteller ist zugleich Teilnehmer mit Rolle "creator" und darf damit Termine, Voting und Suche steuern.
+    const creatorMember = await client.query<{ id: string }>(
+      `INSERT INTO trip_users (trip_id, user_id, name, email, role)
+       VALUES ($1, $2, $3, $4, 'creator') RETURNING id`,
+      [created.id, user.id, displayName(user), user.email]
+    );
+
     if (data.dateMode === 'multiple_choice' && data.dateOptions) {
       for (const option of data.dateOptions) {
         await client.query(
-          'INSERT INTO date_options (trip_id, label, start_date, end_date) VALUES ($1, $2, $3, $4)',
-          [created.id, option.label, option.startDate, option.endDate]
+          'INSERT INTO date_options (trip_id, label, start_date, end_date, created_by) VALUES ($1, $2, $3, $4, $5)',
+          [created.id, option.label, option.startDate, option.endDate, creatorMember.rows[0].id]
         );
       }
     }
-
-    // Der Ersteller ist zugleich Teilnehmer mit Rolle "creator" und darf damit Termine, Voting und Suche steuern.
-    await client.query(
-      `INSERT INTO trip_users (trip_id, user_id, name, email, role)
-       VALUES ($1, $2, $3, $4, 'creator')`,
-      [created.id, user.id, displayName(user), user.email]
-    );
     return created;
   });
 
@@ -120,11 +121,21 @@ export async function getTrip(req: Request, res: Response) {
     [tripId]
   );
 
+  // Nur der Ersteller sieht, wie viele schon abgestimmt haben (Fortschritt, nicht das Ergebnis).
+  let progress: { voted: number; total: number } | undefined;
+  if (req.participant!.role === 'creator') {
+    const voted = await query<{ count: string }>('SELECT COUNT(DISTINCT trip_user_id) FROM votes WHERE trip_id = $1', [tripId]);
+    progress = { voted: parseInt(voted.rows[0].count, 10), total: participants.rows.length };
+  }
+
   res.json({
     trip: result.rows[0],
     participants: participants.rows,
     myRole: req.participant!.role,
     myParticipantId: req.participant!.id,
+    resultsReleased: result.rows[0].results_released_at !== null,
+    resultsNotified: result.rows[0].results_notified_at !== null,
+    progress,
     inviteLink: `${env.frontendUrl}/invite/${result.rows[0].invite_token}`,
   });
 }
@@ -194,11 +205,46 @@ export async function closeVoting(req: Request, res: Response) {
   if (req.participant!.tripId !== tripId) throw forbidden();
 
   const result = await query<Trip>(
-    "UPDATE trips SET status = 'closed' WHERE id = $1 RETURNING *",
+    "UPDATE trips SET status = 'closed', voting_closed_at = COALESCE(voting_closed_at, now()) WHERE id = $1 RETURNING *",
     [tripId]
   );
   if (!result.rows[0]) throw notFound('Trip nicht gefunden');
   res.json({ trip: result.rows[0] });
+}
+
+/** POST /api/trips/:tripId/release-results — gibt die Auswertung für alle Teilnehmer frei (nur Ersteller). */
+export async function releaseResults(req: Request, res: Response) {
+  const { tripId } = req.params;
+  if (req.participant!.tripId !== tripId) throw forbidden();
+
+  const result = await query<Trip>(
+    'UPDATE trips SET results_released_at = COALESCE(results_released_at, now()) WHERE id = $1 RETURNING *',
+    [tripId]
+  );
+  if (!result.rows[0]) throw notFound('Trip nicht gefunden');
+
+  // Haben schon alle abgestimmt, gehen die Ergebnis-Mails sofort raus; sonst mit der letzten fehlenden Stimme.
+  notifyResultsIfReadySafe(tripId);
+  res.json({ trip: result.rows[0], resultsReleased: true });
+}
+
+/** POST /api/trips/:tripId/hide-results — nimmt die Freigabe zurück (nur Ersteller). */
+export async function hideResults(req: Request, res: Response) {
+  const { tripId } = req.params;
+  if (req.participant!.tripId !== tripId) throw forbidden();
+
+  const result = await query<Trip>('UPDATE trips SET results_released_at = NULL WHERE id = $1 RETURNING *', [tripId]);
+  if (!result.rows[0]) throw notFound('Trip nicht gefunden');
+  res.json({ trip: result.rows[0], resultsReleased: false });
+}
+
+/** DELETE /api/trips/:tripId — löscht die Reise samt aller Daten unwiderruflich (nur Ersteller). */
+export async function deleteTrip(req: Request, res: Response) {
+  const { tripId } = req.params;
+  if (req.participant!.tripId !== tripId) throw forbidden();
+
+  await query('DELETE FROM trips WHERE id = $1', [tripId]);
+  res.status(204).send();
 }
 
 /** POST /api/trips/:tripId/reopen-voting — nur der Ersteller darf das Voting wieder öffnen. */
@@ -207,7 +253,7 @@ export async function reopenVoting(req: Request, res: Response) {
   if (req.participant!.tripId !== tripId) throw forbidden();
 
   const result = await query<Trip>(
-    "UPDATE trips SET status = 'voting' WHERE id = $1 AND status = 'closed' RETURNING *",
+    "UPDATE trips SET status = 'voting', voting_closed_at = NULL WHERE id = $1 AND status = 'closed' RETURNING *",
     [tripId]
   );
   if (!result.rows[0]) throw badRequest('Das Voting ist nicht geschlossen');

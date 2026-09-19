@@ -6,7 +6,7 @@ import type { AccommodationSuggestion } from '@shared/types';
 import { AccommodationCard } from '@/components/AccommodationCard';
 import { Button } from '@/components/ui/Button';
 import { Alert, EmptyState, Skeleton } from '@/components/ui/Feedback';
-import { IconBed, IconRefresh } from '@/components/ui/Icons';
+import { IconBed, IconEyeLock, IconRefresh } from '@/components/ui/Icons';
 import { Input } from '@/components/ui/Field';
 import { useToast } from '@/components/ui/Toast';
 import { apiFetch, errorMessage } from '@/lib/api';
@@ -20,10 +20,18 @@ interface AccommodationResponse {
   demo?: boolean;
 }
 
-export function StaysTab({ tripId, isCreator }: { tripId: string; isCreator: boolean }) {
+export function StaysTab({
+  tripId,
+  isCreator,
+  canSeeResults,
+}: {
+  tripId: string;
+  isCreator: boolean;
+  canSeeResults: boolean;
+}) {
   const { toast } = useToast();
   const key = `/trips/${tripId}/accommodations`;
-  const { data, error, isLoading, mutate } = useSWR<AccommodationResponse>(key);
+  const { data, error, isLoading, mutate } = useSWR<AccommodationResponse>(canSeeResults ? key : null);
 
   const [origin, setOrigin] = useState('');
   const [maxPrice, setMaxPrice] = useState('');
@@ -50,6 +58,15 @@ export function StaysTab({ tripId, isCreator }: { tripId: string; isCreator: boo
     }
   }
 
+  if (!canSeeResults) {
+    return (
+      <div className="card">
+        <EmptyState icon={<IconEyeLock size={28} />} title="Unterkunftsvorschläge folgen">
+          Die Vorschläge basieren auf dem Gruppenergebnis und erscheinen, sobald der Ersteller die Auswertung freigibt.
+        </EmptyState>
+      </div>
+    );
+  }
   if (isLoading) return <Skeleton className="h-56" />;
   if (error) return <Alert tone="error">{errorMessage(error)}</Alert>;
 

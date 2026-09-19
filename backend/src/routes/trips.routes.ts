@@ -9,6 +9,9 @@ import {
   joinTrip,
   closeVoting,
   reopenVoting,
+  releaseResults,
+  hideResults,
+  deleteTrip,
 } from '../controllers/trips.controller';
 
 const router = Router();
@@ -35,5 +38,18 @@ router.post(
   requireTripCreatorParticipant,
   asyncHandler(reopenVoting)
 );
+router.post(
+  '/:tripId/release-results',
+  requireParticipantAuth,
+  requireTripCreatorParticipant,
+  asyncHandler(releaseResults)
+);
+router.post(
+  '/:tripId/hide-results',
+  requireParticipantAuth,
+  requireTripCreatorParticipant,
+  asyncHandler(hideResults)
+);
+router.delete('/:tripId', requireParticipantAuth, requireTripCreatorParticipant, asyncHandler(deleteTrip));
 
 export default router;

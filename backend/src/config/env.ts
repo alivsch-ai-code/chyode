@@ -32,6 +32,11 @@ export const env = {
   inviteTtlDays: parseInt(process.env.INVITE_TTL_DAYS ?? '7', 10),
   passwordResetTtlMin: parseInt(process.env.PASSWORD_RESET_TTL_MIN ?? '60', 10),
 
+  // Datensparsamkeit: Reisedaten werden automatisch gelöscht – so viele Tage nach Ende der
+  // Abstimmung bzw. spätestens so viele Tage nach dem Erstellen einer Reise.
+  tripRetentionDays: parseInt(process.env.TRIP_RETENTION_DAYS ?? '7', 10),
+  tripMaxAgeDays: parseInt(process.env.TRIP_MAX_AGE_DAYS ?? '90', 10),
+
   // Selbstregistrierung (E-Mail-Bestätigung, danach sofort nutzbar). Mit REGISTRATION_ENABLED=false
   // ist die App wieder rein einladungsbasiert.
   registrationEnabled: process.env.REGISTRATION_ENABLED !== 'false',

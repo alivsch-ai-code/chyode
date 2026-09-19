@@ -7,7 +7,8 @@
     "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
-    "db:migrate": "node -e \"require('dotenv').config(); const fs=require('fs'); const {Pool}=require('pg'); const pool=new Pool({connectionString:process.env.DATABASE_URL}); pool.query(fs.readFileSync('../database/schema.sql','utf8')).then(()=>{console.log('Schema applied.'); process.exit(0);}).catch(e=>{console.error(e); process.exit(1);});\""
+    "db:migrate": "node -e \"require('dotenv').config(); const fs=require('fs'); const {Pool}=require('pg'); const pool=new Pool({connectionString:process.env.DATABASE_URL}); pool.query(fs.readFileSync('../database/schema.sql','utf8')).then(()=>{console.log('Schema applied.'); process.exit(0);}).catch(e=>{console.error(e); process.exit(1);});\"",
+    "test": "tsx --test tests/*.test.ts"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
@@ -33,6 +34,7 @@
     "@types/nodemailer": "^6.4.24",
     "@types/pg": "^8.11.6",
     "ts-node-dev": "^2.0.0",
+    "tsx": "^4.23.13",
     "typescript": "^5.5.3"
   }
 }

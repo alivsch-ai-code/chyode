@@ -3,6 +3,8 @@ import { z } from 'zod';
 import { query } from '../db/pool';
 import { Vote } from '../types';
 import { badRequest, forbidden, notFound } from '../utils/httpError';
+import { assertResultsAccess, assertVotingOpen } from '../services/access.service';
+import { notifyResultsIfReadySafe } from '../services/notification.service';
 
 const castVoteSchema = z.object({
   dateOptionId: z.string().uuid(),
@@ -16,6 +18,7 @@ const castVoteSchema = z.object({
 export async function castVote(req: Request, res: Response) {
   const { tripId } = req.params;
   if (req.participant!.tripId !== tripId) throw forbidden();
+  await assertVotingOpen(tripId);
 
   const parsed = castVoteSchema.safeParse(req.body);
   if (!parsed.success) throw badRequest(parsed.error.issues[0].message);
@@ -35,6 +38,8 @@ export async function castVote(req: Request, res: Response) {
     [tripId, req.participant!.id, parsed.data.dateOptionId, parsed.data.peopleCount]
   );
 
+  // Hat mit dieser Stimme der Letzte abgestimmt und ist die Auswertung freigegeben, gehen die Ergebnis-Mails raus.
+  notifyResultsIfReadySafe(tripId);
   res.status(201).json({ vote: result.rows[0] });
 }
 
@@ -42,6 +47,7 @@ export async function castVote(req: Request, res: Response) {
 export async function removeVote(req: Request, res: Response) {
   const { tripId, dateOptionId } = req.params;
   if (req.participant!.tripId !== tripId) throw forbidden();
+  await assertVotingOpen(tripId);
 
   await query('DELETE FROM votes WHERE trip_id = $1 AND trip_user_id = $2 AND date_option_id = $3', [
     tripId,
@@ -56,6 +62,7 @@ export async function removeVote(req: Request, res: Response) {
 export async function listVotes(req: Request, res: Response) {
   const { tripId } = req.params;
   if (req.participant!.tripId !== tripId) throw forbidden();
+  await assertResultsAccess(req.participant!);
 
   const result = await query(
     `SELECT v.*, tu.name AS voter_name

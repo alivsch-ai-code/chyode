@@ -100,11 +100,23 @@ export function pluralize(count: number, singular: string, plural: string): stri
 }
 
 export const TRIP_TYPE_LABELS: Record<TripType, string> = {
-  hut: 'Hütte',
-  wellness: 'Wellness',
+  hut: 'Berghütte',
+  chalet: 'Chalet & Ferienhaus',
   hotel: 'Hotel',
+  wellness: 'Wellness- & Spa-Hotel',
+  apartment: 'Ferienwohnung',
+  glamping: 'Glamping & Camping',
   other: 'Sonstiges',
 };
+
+/** ISO-8601-Kalenderwoche (die Woche mit dem ersten Donnerstag des Jahres ist KW 1). */
+export function isoWeek(value: string): number {
+  const date = dateFromYmd(value);
+  const weekday = date.getUTCDay() || 7; // Mo = 1 … So = 7
+  date.setUTCDate(date.getUTCDate() + 4 - weekday); // Donnerstag derselben Woche
+  const yearStart = Date.UTC(date.getUTCFullYear(), 0, 1);
+  return Math.ceil(((date.getTime() - yearStart) / 86_400_000 + 1) / 7);
+}
 
 export const TRIP_STATUS_LABELS: Record<TripStatus, string> = {
   voting: 'Abstimmung läuft',

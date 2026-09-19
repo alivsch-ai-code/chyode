@@ -26,7 +26,8 @@ Ersteller.
 ## Auth
 
 ### `GET /auth/config`
-Öffentliche Einstellungen für die Oberfläche: `{ "registrationEnabled": true }`.
+Öffentliche Einstellungen für die Oberfläche:
+`{ "registrationEnabled": true, "tripRetentionDays": 7, "tripMaxAgeDays": 90 }`.
 
 ### `POST /auth/register`
 Nimmt eine Registrierung entgegen. Es wird **noch kein Konto angelegt**: erst der Klick auf den
@@ -59,8 +60,11 @@ gesperrt (`429`).
 ### `POST /auth/logout`
 Löscht das Session-Cookie.
 
-### `GET /auth/me` · `PATCH /auth/me`
-Eigenes Profil lesen bzw. Anzeigenamen ändern (`{ "name": "Anna" }`).
+### `GET /auth/me` · `PATCH /auth/me` · `DELETE /auth/me`
+Eigenes Profil lesen bzw. Anzeigenamen ändern (`{ "name": "Anna" }`). `DELETE` löscht das Konto samt
+aller Daten (Recht auf Löschung): `{ "password": "…" }` zur Bestätigung → `204`. Reisen, die das
+Konto erstellt hat, werden vollständig gelöscht, Teilnahmen an anderen Reisen ebenfalls. Der letzte
+Administrator kann sich nicht löschen (`409`).
 
 ### `POST /auth/change-password`
 ```json
@@ -158,15 +162,31 @@ Angemeldetes Konto tritt dem Trip bei (idempotent) → `{ "tripId": "uuid", "alr
 Bei geschlossenem Voting `403`, außer das Konto ist bereits Mitglied.
 
 ### `POST /trips/:tripId/close-voting` · `POST /trips/:tripId/reopen-voting`
-Voting schließen bzw. wieder öffnen. Nur Ersteller.
+Voting schließen bzw. wieder öffnen. Nur Ersteller. Mit dem Schließen beginnt die automatische
+Löschfrist (`TRIP_RETENTION_DAYS`); Wiederöffnen setzt sie zurück. Nach dem Schließen sind
+Abstimmen, Präferenzen ändern und Terminvorschläge gesperrt (`403`).
+
+### `POST /trips/:tripId/release-results` · `POST /trips/:tripId/hide-results`
+Gibt die Auswertung für Teilnehmer frei bzw. nimmt die Freigabe zurück. Nur Ersteller. Solange
+nicht freigegeben, sehen Teilnehmer weder `/results`, `/votes` (Liste) noch `/accommodations`
+(`403`) und in `/notes` nur ihre eigenen Notizen. Sind bei der Freigabe (oder mit der letzten
+fehlenden Stimme) alle Mitglieder abgestimmt, erhalten alle **einmalig** eine E-Mail „Das Ergebnis steht fest“ (Markierung `results_notified_at`).
+
+### `DELETE /trips/:tripId`
+Löscht die Reise samt aller Daten sofort (nur Ersteller) → `204`.
+
+`GET /trips/:tripId` liefert zusätzlich `resultsReleased`, `resultsNotified` und – nur für den
+Ersteller – `progress: { voted, total }`.
 
 ---
 
 ## Terminoptionen
 
 ### `POST /trips/:tripId/date-options`
-Fügt einen oder mehrere Termine hinzu (Duplikate mit gleichem Zeitraum werden übersprungen).
-Nur Ersteller.
+Schlägt einen oder mehrere Termine vor (Duplikate mit gleichem Zeitraum werden übersprungen).
+Jedes Mitglied darf, solange abgestimmt werden kann; Teilnehmer höchstens 5 eigene Termine
+(Ersteller unbegrenzt). Der Vorschlagende wird gespeichert und in der Liste angezeigt
+(`proposed_by_name`, `proposed_by_creator`).
 
 ```json
 { "dateOptions": [
@@ -178,7 +198,31 @@ Nur Ersteller.
 Alle Terminoptionen eines Trips (Datumsfelder als `JJJJ-MM-TT`).
 
 ### `DELETE /trips/:tripId/date-options/:dateOptionId`
-Entfernt einen Termin samt Stimmen. Nur Ersteller.
+Entfernt einen Termin samt Stimmen. Ersteller jeden Termin, Teilnehmer nur ihre eigenen Vorschläge.
+
+---
+
+## Präferenzen
+
+Jedes Mitglied gibt seine Höchstbeträge und Wünsche an. Andere sehen nur die anonymisierte
+Gruppenauswertung (siehe `/results`), nie einzelne Angaben.
+
+### `GET /trips/:tripId/preferences/me`
+`{ "preferences": { budgetAccommodation, budgetActivities, experiences[], accommodationTypes[], updatedAt } | null }`
+
+### `PUT /trips/:tripId/preferences`
+```json
+{
+  "budgetAccommodation": 200,
+  "budgetActivities": 100,
+  "experiences": ["nature", "wellness"],
+  "accommodationTypes": ["hut", "wellness"]
+}
+```
+Budgets in Euro pro Person für den gesamten Aufenthalt (`null` = keine Angabe, 0–100000).
+Erlebnisse (höchstens 4): `nature`, `wellness`, `winter`, `culinary`, `adventure`, `culture`, `water`,
+`social`, `calm`. Unterkunftsarten (höchstens 3): `hut`, `chalet`, `hotel`, `wellness`, `apartment`,
+`glamping`. Nur solange die Abstimmung läuft.
 
 ---
 
@@ -220,7 +264,9 @@ Löscht die eigene Notiz.
 ## Ergebnisse
 
 ### `GET /trips/:tripId/results`
-Berechnet Top-Termin, vollständiges Terminranking und häufigste Wünsche.
+Berechnet Top-Termin, Terminranking, **Budget-Statistik** (je Übernachtung, Aktivitäten und
+gesamt: Anzahl, Median, Durchschnitt, Minimum, Maximum), Erlebnis- und Unterkunftswünsche sowie
+häufigste Schlagworte aus den Notizen. Ersteller immer, Teilnehmer erst nach Freigabe (sonst `403`).
 
 **Output**
 ```json
@@ -235,6 +281,14 @@ Berechnet Top-Termin, vollständiges Terminranking und häufigste Wünsche.
     },
     "dateOptionRanking": ["..."],
     "topWishes": [{ "keyword": "sauna", "count": 4, "category": "wish" }],
+    "budget": {
+      "accommodation": { "count": 5, "median": 200, "average": 217, "min": 120, "max": 350 },
+      "activities": { "count": 5, "median": 100, "average": 110, "min": 50, "max": 180 },
+      "total": { "count": 5, "median": 300, "average": 327, "min": 170, "max": 530 }
+    },
+    "experiences": [{ "key": "nature", "count": 4 }],
+    "accommodationTypes": [{ "key": "hut", "count": 3 }],
+    "preferencesSubmitted": 5,
     "totalParticipants": 6,
     "votedParticipants": 5
   }

@@ -6,7 +6,7 @@ import type { Note, NoteCategory } from '@shared/types';
 import { Button } from '@/components/ui/Button';
 import { Textarea } from '@/components/ui/Field';
 import { Alert, Avatar, Badge, EmptyState, Skeleton } from '@/components/ui/Feedback';
-import { IconNote, IconTrash } from '@/components/ui/Icons';
+import { IconLock, IconNote, IconTrash } from '@/components/ui/Icons';
 import { Segmented } from '@/components/ui/Segmented';
 import { useToast } from '@/components/ui/Toast';
 import { apiFetch, errorMessage } from '@/lib/api';
@@ -33,7 +33,7 @@ const PLACEHOLDERS: Record<NoteCategory, string> = {
 export function NotesTab({ tripId, myParticipantId }: { tripId: string; myParticipantId: string }) {
   const { toast } = useToast();
   const key = `/trips/${tripId}/notes`;
-  const { data, error, isLoading, mutate } = useSWR<{ notes: Note[] }>(key);
+  const { data, error, isLoading, mutate } = useSWR<{ notes: Note[]; onlyOwn?: boolean }>(key);
 
   const [category, setCategory] = useState<NoteCategory>('wish');
   const [content, setContent] = useState('');
@@ -77,6 +77,11 @@ export function NotesTab({ tripId, myParticipantId }: { tripId: string; myPartic
         <p className="mt-1 text-callout text-secondary">
           Sag deiner Gruppe, worauf du Wert legst. Häufige Wünsche fließen in die Unterkunftssuche ein.
         </p>
+        {data?.onlyOwn && (
+          <p className="mt-3 inline-flex items-center gap-2 rounded-full bg-fill/12 px-3.5 py-1.5 text-footnote text-secondary">
+            <IconLock size={14} /> Du siehst nur deine eigenen Notizen, bis der Ersteller die Auswertung freigibt.
+          </p>
+        )}
       </div>
 
       <form onSubmit={onSubmit} className="card space-y-5 p-5 sm:p-6" noValidate>

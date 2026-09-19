@@ -134,6 +134,44 @@ export async function updateProfile(req: Request, res: Response) {
   res.json({ user: toPublicUser(result.rows[0]) });
 }
 
+const deleteAccountSchema = z.object({ password: z.string().min(1, 'Bitte gib dein Passwort zur Bestätigung ein').max(200) });
+
+/**
+ * DELETE /api/auth/me — löscht das eigene Konto samt aller Daten (Recht auf Löschung).
+ * Reisen, die das Konto erstellt hat, werden vollständig gelöscht; die Teilnahmen an fremden Reisen
+ * (inkl. Stimmen, Notizen, Präferenzen) ebenfalls.
+ */
+export async function deleteAccount(req: Request, res: Response) {
+  const parsed = deleteAccountSchema.safeParse(req.body);
+  if (!parsed.success) throw badRequest(parsed.error.issues[0].message);
+  const user = req.user!;
+
+  if (!user.password_hash || !(await verifyPassword(parsed.data.password, user.password_hash))) {
+    throw new HttpError(403, 'Das Passwort ist falsch');
+  }
+
+  await withTransaction(async (client) => {
+    if (user.role === 'admin') {
+      const otherAdmins = await client.query(
+        "SELECT 1 FROM users WHERE role = 'admin' AND status = 'active' AND password_hash IS NOT NULL AND id <> $1",
+        [user.id]
+      );
+      if (otherAdmins.rows.length === 0) {
+        throw conflict('Du bist der letzte Administrator. Ernenne zuerst eine andere Person zum Admin.');
+      }
+    }
+
+    await client.query('DELETE FROM trips WHERE creator_id = $1', [user.id]);
+    await client.query('DELETE FROM trip_users WHERE user_id = $1', [user.id]);
+    await client.query('DELETE FROM email_verifications WHERE lower(email) = lower($1)', [user.email]);
+    await client.query('DELETE FROM user_invites WHERE lower(email) = lower($1)', [user.email]);
+    await client.query('DELETE FROM users WHERE id = $1', [user.id]);
+  });
+
+  clearSessionCookie(res);
+  res.status(204).send();
+}
+
 const changePasswordSchema = z.object({
   currentPassword: z.string().min(1, 'Bitte gib dein aktuelles Passwort ein').max(200),
   newPassword: passwordSchema,
@@ -179,7 +217,11 @@ async function claimGuestParticipations(client: PoolClient, userId: string, emai
 
 /** GET /api/auth/config — öffentliche Einstellungen, die die Oberfläche braucht. */
 export async function getAuthConfig(_req: Request, res: Response) {
-  res.json({ registrationEnabled: env.registrationEnabled });
+  res.json({
+    registrationEnabled: env.registrationEnabled,
+    tripRetentionDays: env.tripRetentionDays,
+    tripMaxAgeDays: env.tripMaxAgeDays,
+  });
 }
 
 // Pro Adresse höchstens eine Mail pro Minute (Schutz vor Mail-Bombing fremder Postfächer).

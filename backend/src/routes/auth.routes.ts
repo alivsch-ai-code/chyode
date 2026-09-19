@@ -15,6 +15,7 @@ import {
   getAuthConfig,
   register,
   verifyEmail,
+  deleteAccount,
 } from '../controllers/auth.controller';
 
 const router = Router();
@@ -28,6 +29,7 @@ router.post('/logout', asyncHandler(logout));
 
 router.get('/me', requireAuth, asyncHandler(getCurrentUser));
 router.patch('/me', requireAuth, asyncHandler(updateProfile));
+router.delete('/me', requireAuth, asyncHandler(deleteAccount));
 router.post('/change-password', requireAuth, asyncHandler(changePassword));
 
 router.get('/invite/:token', asyncHandler(getInvite));

@@ -1,12 +1,13 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import useSWR from 'swr';
 import type { DateOption, TripDetailResponse } from '@shared/types';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/Dialog';
 import { Alert, Avatar, Badge } from '@/components/ui/Feedback';
-import { IconCopy, IconLink } from '@/components/ui/Icons';
+import { IconCopy, IconLink, IconLock, IconTrash } from '@/components/ui/Icons';
 import { useToast } from '@/components/ui/Toast';
 import { apiFetch } from '@/lib/api';
 import { copyToClipboard } from '@/lib/clipboard';
@@ -21,10 +22,13 @@ export function OverviewTab({
   onChanged: () => Promise<unknown>;
   isNew: boolean;
 }) {
-  const { trip, participants, myRole, inviteLink } = detail;
+  const { trip, participants, myRole, inviteLink, progress } = detail;
   const { toast } = useToast();
+  const router = useRouter();
   const options = useSWR<{ dateOptions: DateOption[] }>(`/trips/${trip.id}/date-options`);
+  const config = useSWR<{ tripRetentionDays: number; tripMaxAgeDays: number }>('/auth/config');
   const [confirmClose, setConfirmClose] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [reopening, setReopening] = useState(false);
   const isCreator = myRole === 'creator';
   const canShare = typeof navigator !== 'undefined' && typeof navigator.share === 'function';
@@ -46,6 +50,12 @@ export function OverviewTab({
     await apiFetch(`/trips/${trip.id}/close-voting`, { method: 'POST' });
     await onChanged();
     toast('Abstimmung beendet', 'success');
+  }
+
+  async function deleteTrip() {
+    await apiFetch(`/trips/${trip.id}`, { method: 'DELETE' });
+    toast('Reise gelöscht', 'success');
+    router.replace('/');
   }
 
   async function reopenVoting() {
@@ -154,10 +164,72 @@ export function OverviewTab({
         </div>
       </section>
 
+      {isCreator && progress && (
+        <section className="card p-6 sm:p-8" aria-labelledby="progress-heading">
+          <h2 id="progress-heading" className="text-title3">
+            Abstimmungsstand
+          </h2>
+          <p className="mt-1 text-callout text-secondary">
+            {progress.voted} von {progress.total} haben abgestimmt.{' '}
+            {detail.resultsNotified
+              ? 'Alle Teilnehmer wurden per E-Mail über das Ergebnis informiert.'
+              : detail.resultsReleased
+                ? 'Sobald alle abgestimmt haben, bekommen alle eine E-Mail.'
+                : 'Gib die Auswertung im Tab „Ergebnis“ frei, damit alle sie sehen und informiert werden.'}
+          </p>
+        </section>
+      )}
+
+      <section className="card space-y-4 p-6 sm:p-8" aria-labelledby="privacy-heading">
+        <div className="flex items-start gap-3">
+          <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-fill/12 text-secondary">
+            <IconLock size={18} />
+          </span>
+          <div>
+            <h2 id="privacy-heading" className="text-title3">
+              Datensparsamkeit
+            </h2>
+            <p className="mt-1 text-callout text-secondary">
+              Diese Reise wird automatisch gelöscht:{' '}
+              {config.data
+                ? `${pluralize(config.data.tripRetentionDays, 'Tag', 'Tage')} nach Ende der Abstimmung, spätestens ${pluralize(config.data.tripMaxAgeDays, 'Tag', 'Tage')} nach dem Erstellen.`
+                : 'kurz nach Ende der Abstimmung.'}
+            </p>
+          </div>
+        </div>
+        {isCreator && (
+          <Button variant="danger" icon={<IconTrash size={16} />} onClick={() => setConfirmDelete(true)}>
+            Reise jetzt löschen
+          </Button>
+        )}
+      </section>
+
+      <ConfirmDialog
+        open={confirmDelete}
+        danger
+        title="Reise endgültig löschen?"
+        message="Alle Termine, Stimmen, Präferenzen und Notizen dieser Reise werden für alle Teilnehmer unwiderruflich gelöscht."
+        confirmLabel="Löschen"
+        onConfirm={deleteTrip}
+        onClose={() => setConfirmDelete(false)}
+      />
+
       <ConfirmDialog
         open={confirmClose}
         title="Abstimmung beenden?"
-        message="Danach kann niemand mehr neu beitreten oder abstimmen. Du kannst die Abstimmung später wieder öffnen."
+        message={
+          <>
+            Danach kann niemand mehr neu beitreten oder abstimmen. Du kannst die Abstimmung wieder öffnen.
+            {config.data && (
+              <>
+                {' '}
+                <strong className="font-semibold text-label">
+                  Die Reise wird {pluralize(config.data.tripRetentionDays, 'Tag', 'Tage')} nach dem Beenden automatisch gelöscht.
+                </strong>
+              </>
+            )}
+          </>
+        }
         confirmLabel="Beenden"
         onConfirm={closeVoting}
         onClose={() => setConfirmClose(false)}

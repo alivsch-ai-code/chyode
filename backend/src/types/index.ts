@@ -1,4 +1,4 @@
-export type TripType = 'hut' | 'wellness' | 'hotel' | 'other';
+export type TripType = 'hut' | 'chalet' | 'hotel' | 'wellness' | 'apartment' | 'glamping' | 'other';
 export type DateMode = 'fixed' | 'multiple_choice';
 export type TripStatus = 'voting' | 'closed' | 'booked';
 export type ParticipantRole = 'creator' | 'participant';
@@ -60,6 +60,9 @@ export interface Trip {
   budget_per_person: string | null;
   invite_token: string;
   status: TripStatus;
+  results_released_at: string | null;
+  results_notified_at: string | null;
+  voting_closed_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -80,7 +83,20 @@ export interface DateOption {
   label: string;
   start_date: string;
   end_date: string;
+  created_by: string | null;
   created_at: string;
+}
+
+export interface ParticipantPreferences {
+  id: string;
+  trip_id: string;
+  trip_user_id: string;
+  budget_accommodation: string | null;
+  budget_activities: string | null;
+  experiences: string[];
+  accommodation_types: string[];
+  created_at: string;
+  updated_at: string;
 }
 
 export interface Vote {

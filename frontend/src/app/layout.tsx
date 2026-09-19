@@ -4,6 +4,7 @@ import './globals.css';
 import { Providers } from '@/components/Providers';
 import { Navbar } from '@/components/Navbar';
 import { Footer } from '@/components/Footer';
+import { CookieNotice } from '@/components/CookieNotice';
 
 export const metadata: Metadata = {
   title: { default: 'Reiseplaner', template: '%s · Reiseplaner' },
@@ -32,6 +33,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             {children}
           </main>
           <Footer />
+          <CookieNotice />
         </Providers>
       </body>
     </html>

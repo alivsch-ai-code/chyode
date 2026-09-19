@@ -224,3 +224,70 @@ export const IconSettings = createIcon(
   </>,
   'IconSettings'
 );
+export const IconHome = createIcon(
+  <>
+    <path d="M4 11.5 12 4.5l8 7" />
+    <path d="M6 10.5V19a1.5 1.5 0 0 0 1.5 1.5h9A1.5 1.5 0 0 0 18 19v-8.5" />
+    <path d="M10 20.5v-5h4v5" />
+  </>,
+  'IconHome'
+);
+export const IconBuilding = createIcon(
+  <>
+    <rect x="5" y="3.5" width="14" height="17" rx="2" />
+    <path d="M9 8h.01M12 8h.01M15 8h.01M9 12h.01M12 12h.01M15 12h.01" />
+    <path d="M10 20.5v-4h4v4" />
+  </>,
+  'IconBuilding'
+);
+export const IconTent = createIcon(
+  <>
+    <path d="M12 4 3 19.5h18L12 4Z" />
+    <path d="M12 4v15.5M9 19.5l3-5 3 5" />
+  </>,
+  'IconTent'
+);
+export const IconWave = createIcon(
+  <>
+    <path d="M3 9c2 0 2-2 4-2s2 2 4 2 2-2 4-2 2 2 4 2" />
+    <path d="M3 14c2 0 2-2 4-2s2 2 4 2 2-2 4-2 2 2 4 2" />
+    <path d="M3 19c2 0 2-2 4-2s2 2 4 2 2-2 4-2 2 2 4 2" />
+  </>,
+  'IconWave'
+);
+export const IconCompass = createIcon(
+  <>
+    <circle cx="12" cy="12" r="9" />
+    <path d="m15.5 8.5-2 5-5 2 2-5 5-2Z" />
+  </>,
+  'IconCompass'
+);
+export const IconUtensils = createIcon(
+  <path d="M7 3.5v7a2 2 0 0 0 2 2M7 3.5v17M11 3.5v7a2 2 0 0 1-2 2M17 20.5V3.5c-2 1.5-3 4-3 7v2.5h3" />,
+  'IconUtensils'
+);
+export const IconMusic = createIcon(
+  <>
+    <path d="M9 18V6l10-2v12" />
+    <circle cx="6.5" cy="18" r="2.5" />
+    <circle cx="16.5" cy="16" r="2.5" />
+  </>,
+  'IconMusic'
+);
+export const IconMoon = createIcon(<path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5Z" />, 'IconMoon');
+export const IconLandmark = createIcon(
+  <>
+    <path d="M3.5 9 12 4l8.5 5H3.5Z" />
+    <path d="M5.5 9.5v8M9.5 9.5v8M14.5 9.5v8M18.5 9.5v8M3.5 20.5h17M4.5 17.5h15" />
+  </>,
+  'IconLandmark'
+);
+export const IconEyeLock = createIcon(
+  <>
+    <path d="M12 5.5C6 5.5 2.5 12 2.5 12s1.4 2.6 3.7 4.4" />
+    <path d="M21.5 12s-1.2-2.2-3.2-3.9" />
+    <rect x="9" y="12.5" width="6" height="5.5" rx="1.5" />
+    <path d="M10.2 12.5v-1.3a1.8 1.8 0 0 1 3.6 0v1.3" />
+  </>,
+  'IconEyeLock'
+);

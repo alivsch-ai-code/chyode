@@ -8,6 +8,7 @@ import { DatesTab } from '@/components/trip/DatesTab';
 import { IdeasTab } from '@/components/trip/IdeasTab';
 import { NotesTab } from '@/components/trip/NotesTab';
 import { OverviewTab } from '@/components/trip/OverviewTab';
+import { PreferencesTab } from '@/components/trip/PreferencesTab';
 import { ResultsTab } from '@/components/trip/ResultsTab';
 import { StaysTab } from '@/components/trip/StaysTab';
 import { Alert, Badge, PageLoading } from '@/components/ui/Feedback';
@@ -18,6 +19,7 @@ import {
   IconMapPin,
   IconMountain,
   IconNote,
+  IconSparkles,
   IconTrophy,
   IconUsers,
 } from '@/components/ui/Icons';
@@ -26,11 +28,12 @@ import { ApiError, errorMessage } from '@/lib/api';
 import { useRequireAuth } from '@/lib/auth';
 import { TRIP_STATUS_LABELS } from '@/lib/format';
 
-type TabId = 'overview' | 'dates' | 'notes' | 'results' | 'stays' | 'ideas';
+type TabId = 'overview' | 'dates' | 'prefs' | 'notes' | 'results' | 'stays' | 'ideas';
 
 const TABS: TabItem<TabId>[] = [
   { value: 'overview', label: 'Übersicht', icon: <IconUsers size={17} /> },
   { value: 'dates', label: 'Termine', icon: <IconCalendar size={17} /> },
+  { value: 'prefs', label: 'Präferenzen', icon: <IconSparkles size={17} /> },
   { value: 'notes', label: 'Notizen', icon: <IconNote size={17} /> },
   { value: 'results', label: 'Ergebnis', icon: <IconTrophy size={17} /> },
   { value: 'stays', label: 'Unterkünfte', icon: <IconBed size={17} /> },
@@ -42,7 +45,10 @@ const isTabId = (value: string | null): value is TabId => TABS.some((t) => t.val
 export default function TripPage({ params }: { params: { tripId: string } }) {
   const { tripId } = params;
   const { allowed } = useRequireAuth();
-  const { data, error, isLoading, mutate } = useSWR<TripDetailResponse>(allowed ? `/trips/${tripId}` : null);
+  const { data, error, isLoading, mutate } = useSWR<TripDetailResponse>(allowed ? `/trips/${tripId}` : null, {
+    // Teilnehmer erfahren so ohne Neuladen, wann der Ersteller die Auswertung freigibt
+    refreshInterval: (latest) => (latest && latest.myRole !== 'creator' && !latest.resultsReleased ? 30_000 : 0),
+  });
   const [tab, setTab] = useState<TabId>('overview');
   const [isNew, setIsNew] = useState(false);
 
@@ -82,8 +88,10 @@ export default function TripPage({ params }: { params: { tripId: string } }) {
     );
   }
 
-  const { trip, participants, myRole, myParticipantId } = data;
+  const { trip, participants, myRole, myParticipantId, resultsReleased } = data;
   const isCreator = myRole === 'creator';
+  // Ersteller sehen die Auswertung immer, Teilnehmer erst nach Freigabe
+  const canSeeResults = isCreator || resultsReleased;
 
   return (
     <div className="animate-fade-up space-y-8">
@@ -113,13 +121,24 @@ export default function TripPage({ params }: { params: { tripId: string } }) {
             tripId={trip.id}
             votingOpen={trip.status === 'voting'}
             isCreator={isCreator}
+            canSeeResults={canSeeResults}
+            myParticipantId={myParticipantId}
             participantCount={participants.length}
           />
         )}
+        {tab === 'prefs' && <PreferencesTab tripId={trip.id} votingOpen={trip.status === 'voting'} />}
         {tab === 'notes' && <NotesTab tripId={trip.id} myParticipantId={myParticipantId} />}
-        {tab === 'results' && <ResultsTab tripId={trip.id} />}
-        {tab === 'stays' && <StaysTab tripId={trip.id} isCreator={isCreator} />}
-        {tab === 'ideas' && <IdeasTab tripId={trip.id} />}
+        {tab === 'results' && (
+          <ResultsTab
+            tripId={trip.id}
+            isCreator={isCreator}
+            resultsReleased={resultsReleased}
+            progress={data.progress}
+            onReleaseChanged={() => mutate()}
+          />
+        )}
+        {tab === 'stays' && <StaysTab tripId={trip.id} isCreator={isCreator} canSeeResults={canSeeResults} />}
+        {tab === 'ideas' && <IdeasTab tripId={trip.id} canSeeResults={canSeeResults} />}
       </div>
     </div>
   );

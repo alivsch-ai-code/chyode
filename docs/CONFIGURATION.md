@@ -43,6 +43,8 @@ Ein `JWT_SECRET` erzeugst du z. B. mit `openssl rand -hex 32`. `NEXT_PUBLIC_API_
 | `SESSION_TTL_DAYS` | – | `7` | Gültigkeit der Anmeldung |
 | `INVITE_TTL_DAYS` | – | `7` | Gültigkeit von Einladungslinks |
 | `PASSWORD_RESET_TTL_MIN` | – | `60` | Gültigkeit von Reset-Links |
+| `TRIP_RETENTION_DAYS` | – | `7` | Reisedaten werden so viele Tage nach Ende der Abstimmung automatisch gelöscht |
+| `TRIP_MAX_AGE_DAYS` | – | `90` | Nie abgeschlossene Reisen werden spätestens nach so vielen Tagen gelöscht |
 | `REGISTRATION_ENABLED` | – | `true` | `false` schließt die Selbstregistrierung (dann nur Einladungen) |
 | `VERIFICATION_TTL_HOURS` | – | `24` | Gültigkeit des Bestätigungslinks der Registrierung |
 | `REGISTRATION_HOURLY_LIMIT` | – | `30` | Höchstzahl neuer Registrierungsanfragen pro Stunde (Schutz des Mail-Postfachs) |

@@ -12,6 +12,7 @@ import tripsRoutes from './routes/trips.routes';
 import dateOptionsRoutes from './routes/dateOptions.routes';
 import votesRoutes from './routes/votes.routes';
 import notesRoutes from './routes/notes.routes';
+import preferencesRoutes from './routes/preferences.routes';
 import resultsRoutes from './routes/results.routes';
 import accommodationsRoutes from './routes/accommodations.routes';
 
@@ -26,7 +27,13 @@ export function createApp() {
   app.use(cors({ origin: env.frontendUrl, credentials: true }));
   app.use(express.json({ limit: '100kb' }));
   app.use(cookieParser());
-  app.use(morgan(env.nodeEnv === 'production' ? 'combined' : 'dev'));
+  // Datensparsamkeit: keine IP-Adressen, keine User-Agents, keine Query-Strings; Token in Pfaden
+  // (Einladungen, Reset-Links) werden unkenntlich gemacht.
+  morgan.token('safe-url', (req) => {
+    const url = (req as { originalUrl?: string }).originalUrl ?? req.url ?? '';
+    return url.split('?')[0].replace(/\/(invite|reset)\/[^/\s]+/g, '/$1/[entfernt]');
+  });
+  app.use(morgan(env.nodeEnv === 'production' ? ':method :safe-url :status :response-time ms' : 'dev'));
 
   app.get('/health', (req, res) => res.json({ status: 'ok' }));
 
@@ -36,6 +43,7 @@ export function createApp() {
   app.use('/api/trips/:tripId/date-options', dateOptionsRoutes);
   app.use('/api/trips/:tripId/votes', votesRoutes);
   app.use('/api/trips/:tripId/notes', notesRoutes);
+  app.use('/api/trips/:tripId/preferences', preferencesRoutes);
   app.use('/api/trips/:tripId/results', resultsRoutes);
   app.use('/api/trips/:tripId/accommodations', accommodationsRoutes);
 

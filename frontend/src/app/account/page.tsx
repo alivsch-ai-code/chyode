@@ -1,13 +1,15 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
 import { useState, type FormEvent } from 'react';
 import type { AuthUser } from '@shared/types';
 import { Button } from '@/components/ui/Button';
+import { Dialog } from '@/components/ui/Dialog';
 import { Input, PasswordInput, PasswordRules } from '@/components/ui/Field';
 import { Alert, Avatar, Badge, PageLoading } from '@/components/ui/Feedback';
 import { useToast } from '@/components/ui/Toast';
 import { apiFetch, errorMessage } from '@/lib/api';
-import { useRequireAuth } from '@/lib/auth';
+import { useAuth, useRequireAuth } from '@/lib/auth';
 import { formatDateTime } from '@/lib/format';
 
 export default function AccountPage() {
@@ -27,6 +29,7 @@ export default function AccountPage() {
 
       <ProfileCard user={user} onUpdated={setUser} />
       <PasswordCard />
+      <DeleteAccountCard />
 
       {user.last_login_at && (
         <p className="text-center text-footnote text-secondary">Letzte Anmeldung: {formatDateTime(user.last_login_at)}</p>
@@ -74,6 +77,68 @@ function ProfileCard({ user, onUpdated }: { user: AuthUser; onUpdated: (user: Au
           Speichern
         </Button>
       </form>
+    </section>
+  );
+}
+
+function DeleteAccountCard() {
+  const router = useRouter();
+  const { logout } = useAuth();
+  const [open, setOpen] = useState(false);
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function onDelete(event: FormEvent) {
+    event.preventDefault();
+    setError(null);
+    setBusy(true);
+    try {
+      await apiFetch('/auth/me', { method: 'DELETE', body: { password } });
+      await logout();
+      router.replace('/');
+    } catch (err) {
+      setError(errorMessage(err));
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="card p-6 sm:p-8" aria-labelledby="delete-heading">
+      <h2 id="delete-heading" className="text-title3">
+        Konto löschen
+      </h2>
+      <p className="mt-1 text-callout text-secondary">
+        Löscht dein Konto und alle deine Daten unwiderruflich – auch Reisen, die du erstellt hast, samt allen Teilnehmerdaten.
+        Deine Teilnahmen, Stimmen und Notizen bei anderen Reisen werden ebenfalls entfernt.
+      </p>
+      <Button variant="danger" className="mt-5" onClick={() => setOpen(true)}>
+        Konto löschen …
+      </Button>
+
+      <Dialog open={open} onClose={() => setOpen(false)} title="Konto löschen">
+        <form onSubmit={onDelete} className="space-y-5">
+          <div>
+            <h2 className="text-title3">Konto endgültig löschen?</h2>
+            <p className="mt-2 text-callout text-secondary">Bestätige mit deinem Passwort. Das lässt sich nicht rückgängig machen.</p>
+          </div>
+          {error && <Alert tone="error">{error}</Alert>}
+          <PasswordInput
+            label="Passwort"
+            autoComplete="current-password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <Button variant="plain" onClick={() => setOpen(false)} disabled={busy}>
+              Abbrechen
+            </Button>
+            <Button type="submit" variant="danger-solid" loading={busy} disabled={!password}>
+              Endgültig löschen
+            </Button>
+          </div>
+        </form>
+      </Dialog>
     </section>
   );
 }

@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { query } from '../db/pool';
 import { Note } from '../types';
 import { badRequest, forbidden } from '../utils/httpError';
+import { canSeeResults } from '../services/access.service';
 
 const createNoteSchema = z.object({
   category: z.enum(['wish', 'idea', 'requirement']).default('wish'),
@@ -30,15 +31,18 @@ export async function listNotes(req: Request, res: Response) {
   const { tripId } = req.params;
   if (req.participant!.tripId !== tripId) throw forbidden();
 
+  // Vor der Freigabe der Auswertung sehen Teilnehmer nur ihre eigenen Notizen (kein gegenseitiges Beeinflussen).
+  const seeAll = await canSeeResults(req.participant!);
+
   const result = await query(
     `SELECT n.*, tu.name AS author_name
      FROM notes n
      JOIN trip_users tu ON tu.id = n.trip_user_id
-     WHERE n.trip_id = $1
+     WHERE n.trip_id = $1 AND ($2::boolean OR n.trip_user_id = $3)
      ORDER BY n.created_at DESC`,
-    [tripId]
+    [tripId, seeAll, req.participant!.id]
   );
-  res.json({ notes: result.rows });
+  res.json({ notes: result.rows, onlyOwn: !seeAll });
 }
 
 /** DELETE /api/trips/:tripId/notes/:noteId — eigene Notiz löschen. */

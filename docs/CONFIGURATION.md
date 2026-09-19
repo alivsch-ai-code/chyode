@@ -43,6 +43,9 @@ Ein `JWT_SECRET` erzeugst du z. B. mit `openssl rand -hex 32`. `NEXT_PUBLIC_API_
 | `SESSION_TTL_DAYS` | – | `7` | Gültigkeit der Anmeldung |
 | `INVITE_TTL_DAYS` | – | `7` | Gültigkeit von Einladungslinks |
 | `PASSWORD_RESET_TTL_MIN` | – | `60` | Gültigkeit von Reset-Links |
+| `REGISTRATION_ENABLED` | – | `true` | `false` schließt die Selbstregistrierung (dann nur Einladungen) |
+| `VERIFICATION_TTL_HOURS` | – | `24` | Gültigkeit des Bestätigungslinks der Registrierung |
+| `REGISTRATION_HOURLY_LIMIT` | – | `30` | Höchstzahl neuer Registrierungsanfragen pro Stunde (Schutz des Mail-Postfachs) |
 | `SMTP_HOST` / `SMTP_PORT` | – | `smtp.ionos.de` / `587` | Mailserver (587 = STARTTLS, 465 = SSL) |
 | `SMTP_SECURE` | – | abhängig vom Port | `true` erzwingt SSL |
 | `SMTP_USER` / `SMTP_PASS` | für Mailversand | leer | Zugang des Postfachs. Ohne Werte werden Mails nur ins Log geschrieben |

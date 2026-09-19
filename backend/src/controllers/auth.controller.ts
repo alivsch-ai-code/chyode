@@ -1,15 +1,21 @@
 import { CookieOptions, Request, Response } from 'express';
+import { PoolClient } from 'pg';
 import { z } from 'zod';
 import { query, withTransaction } from '../db/pool';
 import { PublicUser, User, UserInvite } from '../types';
 import { env } from '../config/env';
 import { SESSION_COOKIE } from '../middleware/auth';
-import { HttpError, badRequest, conflict, notFound, unauthorized } from '../utils/httpError';
+import { HttpError, badRequest, conflict, forbidden, notFound, unauthorized } from '../utils/httpError';
 import { signSessionToken } from '../utils/jwt';
 import { hashPassword, passwordSchema, verifyAgainstDummy, verifyPassword } from '../utils/password';
 import { generateToken, hashString } from '../utils/tokens';
 import { sendMail } from '../services/mailer.service';
-import { passwordChangedEmail, passwordResetEmail } from '../services/emailTemplates';
+import {
+  accountExistsEmail,
+  passwordChangedEmail,
+  passwordResetEmail,
+  verifyEmailEmail,
+} from '../services/emailTemplates';
 
 const MAX_FAILED_LOGINS = 5;
 const LOCK_MINUTES = 15;
@@ -157,6 +163,201 @@ export async function changePassword(req: Request, res: Response) {
   res.json({ ok: true });
 }
 
+/** Ordnet frühere Gast-Teilnahmen (Altdaten ohne Konto) mit gleicher E-Mail dem Account zu. */
+async function claimGuestParticipations(client: PoolClient, userId: string, email: string) {
+  await client.query(
+    `UPDATE trip_users tu SET user_id = $1
+     WHERE tu.user_id IS NULL AND lower(tu.email) = lower($2)
+       AND NOT EXISTS (SELECT 1 FROM trip_users o WHERE o.trip_id = tu.trip_id AND o.user_id = $1)`,
+    [userId, email]
+  );
+}
+
+// ------------------------------------------------------------
+// Selbstregistrierung mit E-Mail-Bestätigung
+// ------------------------------------------------------------
+
+/** GET /api/auth/config — öffentliche Einstellungen, die die Oberfläche braucht. */
+export async function getAuthConfig(_req: Request, res: Response) {
+  res.json({ registrationEnabled: env.registrationEnabled });
+}
+
+// Pro Adresse höchstens eine Mail pro Minute (Schutz vor Mail-Bombing fremder Postfächer).
+const MAIL_COOLDOWN_MS = 60_000;
+const recentMails = new Map<string, number>();
+
+function mailAllowed(key: string): boolean {
+  const now = Date.now();
+  for (const [k, t] of recentMails) if (now - t > MAIL_COOLDOWN_MS) recentMails.delete(k);
+  if (recentMails.has(key)) return false;
+  recentMails.set(key, now);
+  return true;
+}
+
+/** Nur relative Pfade als Ziel nach der Bestätigung zulassen (kein Open-Redirect). */
+function sanitizeRedirect(value: string | undefined): string | null {
+  if (!value) return null;
+  if (!value.startsWith('/') || value.startsWith('//') || value.includes('\\') || /[\r\n]/.test(value)) return null;
+  return value.slice(0, 300);
+}
+
+const registerSchema = z.object({
+  name: z.string().trim().min(1, 'Bitte gib deinen Namen ein').max(120),
+  email: emailSchema,
+  password: passwordSchema,
+  next: z.string().max(300).optional(),
+  // Honeypot: für Menschen unsichtbar, Bots füllen es aus
+  website: z.string().max(200).optional(),
+});
+
+interface EmailVerificationRow {
+  id: string;
+  email: string;
+  name: string;
+  password_hash: string;
+  redirect_path: string | null;
+}
+
+/**
+ * POST /api/auth/register — nimmt eine Registrierung entgegen. Es wird noch KEIN Konto angelegt:
+ * erst der Klick auf den Bestätigungslink aus der E-Mail erzeugt es. Die Antwort ist immer
+ * gleich, damit sich nicht herausfinden lässt, welche Adressen schon registriert sind.
+ */
+export async function register(req: Request, res: Response) {
+  if (!env.registrationEnabled) {
+    throw forbidden('Die Registrierung ist derzeit geschlossen. Bitte lass dich von einem Administrator einladen.');
+  }
+
+  const parsed = registerSchema.safeParse(req.body);
+  if (!parsed.success) throw badRequest(parsed.error.issues[0].message);
+  const { name, email, password, website } = parsed.data;
+
+  const neutralResponse = {
+    message: 'Fast geschafft! Wir haben dir eine E-Mail geschickt. Bestätige darin deine Adresse, um loszulegen.',
+  };
+
+  if (website) return res.json(neutralResponse); // Bot
+
+  if (password.toLowerCase() === email) throw badRequest('Das Passwort darf nicht deiner E-Mail-Adresse entsprechen');
+
+  // Hashen in allen Pfaden, damit die Antwortzeit nicht verrät, ob die Adresse schon registriert ist
+  const passwordHash = await hashPassword(password);
+
+  const existing = await query<User>('SELECT * FROM users WHERE lower(email) = $1', [email]);
+  const account = existing.rows[0];
+
+  if (account?.password_hash) {
+    // Konto existiert: Hinweis an das Postfach statt an den Anfragenden (keine Enumeration)
+    if (account.status === 'active' && mailAllowed(`exists:${email}`)) {
+      void sendMail(
+        email,
+        accountExistsEmail({
+          name: account.name,
+          loginLink: `${env.frontendUrl}/login`,
+          resetLink: `${env.frontendUrl}/forgot-password`,
+        })
+      );
+    }
+    return res.json(neutralResponse);
+  }
+
+  if (!mailAllowed(`verify:${email}`)) return res.json(neutralResponse);
+
+  const recent = await query<{ count: string }>(
+    "SELECT COUNT(*) FROM email_verifications WHERE created_at > now() - interval '1 hour'"
+  );
+  if (parseInt(recent.rows[0].count, 10) >= env.registrationHourlyLimit) {
+    throw new HttpError(429, 'Momentan gibt es sehr viele Registrierungen. Bitte versuche es später erneut.');
+  }
+
+  const token = generateToken(32);
+  const redirectPath = sanitizeRedirect(parsed.data.next);
+
+  await withTransaction(async (client) => {
+    await client.query("DELETE FROM email_verifications WHERE expires_at < now() - interval '7 days'");
+    await client.query(
+      'UPDATE email_verifications SET used_at = now() WHERE lower(email) = $1 AND used_at IS NULL',
+      [email]
+    );
+    await client.query(
+      `INSERT INTO email_verifications (email, name, password_hash, redirect_path, token_hash, expires_at)
+       VALUES ($1, $2, $3, $4, $5, now() + ($6 || ' hours')::interval)`,
+      [email, name, passwordHash, redirectPath, hashString(token), String(env.verificationTtlHours)]
+    );
+  });
+
+  void sendMail(
+    email,
+    verifyEmailEmail({
+      name,
+      link: `${env.frontendUrl}/verify-email/${encodeURIComponent(token)}`,
+      expiresInHours: env.verificationTtlHours,
+    })
+  );
+
+  res.json(neutralResponse);
+}
+
+const verifyEmailSchema = z.object({ token: z.string().min(10).max(200) });
+
+/** POST /api/auth/verify-email — bestätigt die Adresse, legt das Konto an und meldet an. */
+export async function verifyEmail(req: Request, res: Response) {
+  if (!env.registrationEnabled) {
+    throw forbidden('Die Registrierung ist derzeit geschlossen. Bitte lass dich von einem Administrator einladen.');
+  }
+  const parsed = verifyEmailSchema.safeParse(req.body);
+  if (!parsed.success) throw badRequest('Ungültiger Bestätigungslink');
+
+  const { user, redirectPath } = await withTransaction(async (client) => {
+    const found = await client.query<EmailVerificationRow>(
+      `SELECT id, email, name, password_hash, redirect_path FROM email_verifications
+       WHERE token_hash = $1 AND used_at IS NULL AND expires_at > now()
+       FOR UPDATE`,
+      [hashString(parsed.data.token)]
+    );
+    const verification = found.rows[0];
+    if (!verification) throw notFound('Dieser Bestätigungslink ist ungültig oder abgelaufen');
+
+    const existingResult = await client.query<User>(
+      'SELECT * FROM users WHERE lower(email) = lower($1) FOR UPDATE',
+      [verification.email]
+    );
+    const existing = existingResult.rows[0];
+
+    if (existing?.password_hash) {
+      await client.query('UPDATE email_verifications SET used_at = now() WHERE id = $1', [verification.id]);
+      throw conflict('Für diese E-Mail-Adresse existiert bereits ein Konto. Bitte melde dich an.');
+    }
+    if (existing?.status === 'disabled') throw forbidden('Dieses Konto ist deaktiviert.');
+
+    let account: User;
+    if (existing) {
+      // Altkonto ohne Passwort (früherer Magic-Link-Login): die bestätigte Adresse schaltet es frei
+      const updated = await client.query<User>(
+        `UPDATE users SET password_hash = $2, name = $3, token_version = token_version + 1, last_login_at = now()
+         WHERE id = $1 RETURNING *`,
+        [existing.id, verification.password_hash, verification.name]
+      );
+      account = updated.rows[0];
+    } else {
+      const created = await client.query<User>(
+        `INSERT INTO users (email, name, password_hash, role, last_login_at)
+         VALUES (lower($1), $2, $3, 'user', now()) RETURNING *`,
+        [verification.email, verification.name, verification.password_hash]
+      );
+      account = created.rows[0];
+    }
+
+    await client.query('UPDATE email_verifications SET used_at = now() WHERE id = $1', [verification.id]);
+    await claimGuestParticipations(client, account.id, verification.email);
+
+    return { user: account, redirectPath: verification.redirect_path };
+  });
+
+  setSessionCookie(res, user);
+  res.status(201).json({ user: toPublicUser(user), next: redirectPath });
+}
+
 // ------------------------------------------------------------
 // Einladung annehmen (Registrierung)
 // ------------------------------------------------------------
@@ -236,13 +437,7 @@ export async function acceptInvite(req: Request, res: Response) {
 
     await client.query('UPDATE user_invites SET used_at = now() WHERE id = $1', [invite.id]);
 
-    // frühere Gast-Teilnahmen mit derselben E-Mail dem Account zuordnen
-    await client.query(
-      `UPDATE trip_users tu SET user_id = $1
-       WHERE tu.user_id IS NULL AND lower(tu.email) = lower($2)
-         AND NOT EXISTS (SELECT 1 FROM trip_users o WHERE o.trip_id = tu.trip_id AND o.user_id = $1)`,
-      [account.id, invite.email]
-    );
+    await claimGuestParticipations(client, account.id, invite.email);
 
     return account;
   });

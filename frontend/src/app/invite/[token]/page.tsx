@@ -60,6 +60,7 @@ export default function InvitePage({ params }: { params: { token: string } }) {
 
   const { trip, participantCount } = data;
   const loginHref = `/login?next=${encodeURIComponent(`/invite/${token}`)}`;
+  const registerHref = `/register?next=${encodeURIComponent(`/invite/${token}`)}`;
 
   return (
     <div className="mx-auto w-full max-w-narrow animate-fade-up pt-2 sm:pt-8">
@@ -115,8 +116,11 @@ export default function InvitePage({ params }: { params: { token: string } }) {
               <LinkButton href={loginHref} size="lg" fullWidth>
                 Anmelden und beitreten
               </LinkButton>
+              <LinkButton href={registerHref} variant="plain" size="lg" fullWidth>
+                Konto erstellen
+              </LinkButton>
               <p className="text-center text-footnote text-secondary">
-                Für die Teilnahme brauchst du ein Konto. Der Zugang erfolgt per Einladung durch einen Administrator.
+                Für die Teilnahme brauchst du ein Konto. Nach der Registrierung landest du wieder hier und kannst beitreten.
               </p>
             </div>
           )}

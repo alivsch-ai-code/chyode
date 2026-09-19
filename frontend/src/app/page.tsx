@@ -62,11 +62,14 @@ function Landing() {
           Die einfachste Art, mit Freunden ein Wochenende in den Bergen zu organisieren – vom Termin bis zur Unterkunft.
         </p>
         <div className="mt-9 flex flex-wrap justify-center gap-3">
-          <LinkButton href="/login" size="lg">
+          <LinkButton href="/register" size="lg">
+            Konto erstellen
+          </LinkButton>
+          <LinkButton href="/login" variant="plain" size="lg">
             Anmelden
           </LinkButton>
         </div>
-        <p className="mt-4 text-footnote text-secondary">Der Zugang ist nur mit Einladung möglich.</p>
+        <p className="mt-4 text-footnote text-secondary">Kostenlos registrieren – E-Mail-Adresse bestätigen und loslegen.</p>
 
         <div className="relative mx-auto mt-14 max-w-4xl overflow-hidden rounded-sheet shadow-lift">
           <div className="aspect-[2/1] sm:aspect-[21/9]">

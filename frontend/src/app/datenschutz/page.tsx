@@ -25,6 +25,11 @@ export default function DatenschutzPage() {
             Passwort-Hash (das Passwort selbst wird nicht gespeichert).
           </li>
           <li>
+            <strong className="font-semibold text-label">Registrierung:</strong> Bis zur Bestätigung der E-Mail-Adresse wird
+            die Anfrage (Name, E-Mail-Adresse, Passwort-Hash) gespeichert; unbestätigte Anfragen verfallen nach 24 Stunden und
+            werden später gelöscht.
+          </li>
+          <li>
             <strong className="font-semibold text-label">Reisedaten:</strong> Reisen, Terminvorschläge, Abstimmungen,
             Notizen und Teilnahmen, die du selbst eingibst.
           </li>

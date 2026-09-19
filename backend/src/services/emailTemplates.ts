@@ -33,11 +33,11 @@ function renderLayout(options: LayoutOptions): string {
 
   const buttonHtml = button
     ? `<table role="presentation" cellspacing="0" cellpadding="0" style="margin:24px 0;">
-        <tr><td style="border-radius:10px;background:#0f766e;">
+        <tr><td style="border-radius:10px;background:#0071e3;">
           <a href="${escapeHtml(button.url)}" style="display:inline-block;padding:14px 28px;font-size:16px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:10px;">${escapeHtml(button.label)}</a>
         </td></tr>
       </table>
-      <p style="margin:0 0 16px;font-size:13px;line-height:1.5;color:#64748b;">Falls der Button nicht funktioniert, kopiere diesen Link in deinen Browser:<br><a href="${escapeHtml(button.url)}" style="color:#0f766e;word-break:break-all;">${escapeHtml(button.url)}</a></p>`
+      <p style="margin:0 0 16px;font-size:13px;line-height:1.5;color:#64748b;">Falls der Button nicht funktioniert, kopiere diesen Link in deinen Browser:<br><a href="${escapeHtml(button.url)}" style="color:#0071e3;word-break:break-all;">${escapeHtml(button.url)}</a></p>`
     : '';
 
   const footnoteHtml = footnote
@@ -52,7 +52,7 @@ function renderLayout(options: LayoutOptions): string {
   <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f1f5f9;padding:32px 16px;">
     <tr><td align="center">
       <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:560px;background:#ffffff;border-radius:16px;overflow:hidden;">
-        <tr><td style="background:#0f766e;padding:20px 32px;font-size:18px;font-weight:700;color:#ffffff;">${appName}</td></tr>
+        <tr><td style="background:#0071e3;padding:20px 32px;font-size:18px;font-weight:700;color:#ffffff;">${appName}</td></tr>
         <tr><td style="padding:32px;">
           <h1 style="margin:0 0 16px;font-size:22px;line-height:1.3;color:#0f172a;">${escapeHtml(heading)}</h1>
           ${paragraphHtml}
@@ -101,6 +101,65 @@ export function inviteEmail(params: {
   ].join('\n');
 
   return { subject: `Einladung zum ${env.appName}`, html, text };
+}
+
+export function verifyEmailEmail(params: {
+  name: string | null;
+  link: string;
+  expiresInHours: number;
+}): EmailContent {
+  const { name, link, expiresInHours } = params;
+
+  const html = renderLayout({
+    preheader: 'Bestätige deine E-Mail-Adresse, um loszulegen.',
+    heading: 'Bestätige deine E-Mail-Adresse',
+    paragraphs: [
+      name ? `Hallo ${escapeHtml(name)},` : 'Hallo,',
+      `schön, dass du dabei bist! Bestätige kurz deine E-Mail-Adresse, damit wir dein Konto beim ${escapeHtml(env.appName)} anlegen können.`,
+    ],
+    button: { label: 'E-Mail-Adresse bestätigen', url: link },
+    footnote: `Der Link ist ${expiresInHours} Stunden gültig und kann nur einmal verwendet werden. Wenn du dich nicht registriert hast, kannst du diese E-Mail ignorieren – es wird dann kein Konto angelegt.`,
+  });
+
+  const text = [
+    name ? `Hallo ${name},` : 'Hallo,',
+    '',
+    `schön, dass du dabei bist! Bestätige deine E-Mail-Adresse, damit wir dein Konto beim ${env.appName} anlegen können:`,
+    link,
+    '',
+    `Der Link ist ${expiresInHours} Stunden gültig und kann nur einmal verwendet werden.`,
+    'Wenn du dich nicht registriert hast, kannst du diese E-Mail ignorieren – es wird dann kein Konto angelegt.',
+  ].join('\n');
+
+  return { subject: `Bestätige deine E-Mail-Adresse – ${env.appName}`, html, text };
+}
+
+export function accountExistsEmail(params: { name: string | null; loginLink: string; resetLink: string }): EmailContent {
+  const { name, loginLink, resetLink } = params;
+
+  const html = renderLayout({
+    preheader: 'Für diese E-Mail-Adresse gibt es bereits ein Konto.',
+    heading: 'Du hast schon ein Konto',
+    paragraphs: [
+      name ? `Hallo ${escapeHtml(name)},` : 'Hallo,',
+      `jemand hat versucht, mit dieser E-Mail-Adresse ein Konto beim ${escapeHtml(env.appName)} anzulegen – es existiert aber bereits eines. Melde dich einfach an.`,
+      `Passwort vergessen? <a href="${escapeHtml(resetLink)}" style="color:#0071e3;">Hier kannst du ein neues festlegen.</a>`,
+    ],
+    button: { label: 'Zur Anmeldung', url: loginLink },
+    footnote: 'Warst du das nicht, musst du nichts weiter tun.',
+  });
+
+  const text = [
+    name ? `Hallo ${name},` : 'Hallo,',
+    '',
+    `jemand hat versucht, mit dieser E-Mail-Adresse ein Konto beim ${env.appName} anzulegen – es existiert aber bereits eines.`,
+    `Anmelden: ${loginLink}`,
+    `Passwort vergessen: ${resetLink}`,
+    '',
+    'Warst du das nicht, musst du nichts weiter tun.',
+  ].join('\n');
+
+  return { subject: `Du hast bereits ein Konto – ${env.appName}`, html, text };
 }
 
 export function passwordResetEmail(params: {

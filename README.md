@@ -18,10 +18,11 @@ abstimmen, Wünsche notieren, Ideen für die Berge entdecken und passende Unterk
 
 ## User-Flow
 
-1. Ein **Administrator** lädt Personen per E-Mail ein. Die Einladung enthält einen persönlichen
-   Link (7 Tage gültig, einmalig verwendbar).
-2. Die eingeladene Person legt Namen und **Passwort** fest und ist angemeldet. Passwort
-   vergessen? Über „Passwort vergessen“ kommt ein Reset-Link per E-Mail.
+1. Interessenten **registrieren** sich selbst (Name, E-Mail, Passwort) und bestätigen ihre
+   Adresse per Mail-Link – danach ist das Konto sofort nutzbar. Alternativ lädt ein
+   **Administrator** Personen per E-Mail ein (persönlicher Link, 7 Tage gültig, einmalig).
+   Die Selbstregistrierung lässt sich mit `REGISTRATION_ENABLED=false` abschalten.
+2. Passwort vergessen? Über „Passwort vergessen“ kommt ein Reset-Link per E-Mail.
 3. Jedes Konto kann **Reisen erstellen** (Titel, Ort, Art, Budget) und dafür im
    **Wochenend-Picker** gezielt Wochenenden auswählen (Fr–So, Sa–So, Do–So, Fr–Mo; bundesweite
    Feiertage werden markiert). Der Einladungslink der Reise wird mit der Gruppe geteilt.
@@ -32,8 +33,15 @@ abstimmen, Wünsche notieren, Ideen für die Berge entdecken und passende Unterk
 
 ## Erster Start (Administrator anlegen)
 
-Neue Konten entstehen nur per Einladung. Der erste Administrator wird per Skript angelegt
-(existiert die E-Mail schon, wird das Konto zum Admin befördert):
+Der erste Administrator entsteht per Skript. Variante A: sich zuerst normal registrieren und das
+Konto dann befördern:
+
+```bash
+docker compose exec backend node dist/scripts/bootstrap-admin.js admin@example.com --promote-only
+```
+
+Variante B: eine Admin-Einladung erzeugen (existiert die E-Mail schon, wird das Konto zum Admin
+befördert und bekommt einen Passwort-Setz-Link):
 
 ```bash
 docker compose exec backend node dist/scripts/bootstrap-admin.js admin@example.com "Vorname Nachname"

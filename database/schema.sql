@@ -44,6 +44,24 @@ CREATE TABLE IF NOT EXISTS user_invites (
 CREATE INDEX IF NOT EXISTS idx_user_invites_email ON user_invites (lower(email));
 
 -- ------------------------------------------------------------
+-- email_verifications: offene Selbstregistrierungen (Konto entsteht erst nach Bestätigung)
+-- ------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS email_verifications (
+  id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  email          TEXT NOT NULL,
+  name           TEXT NOT NULL,
+  password_hash  TEXT NOT NULL,
+  redirect_path  TEXT,
+  token_hash     TEXT UNIQUE NOT NULL,
+  expires_at     TIMESTAMPTZ NOT NULL,
+  used_at        TIMESTAMPTZ,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_email_verifications_email ON email_verifications (lower(email));
+CREATE INDEX IF NOT EXISTS idx_email_verifications_created ON email_verifications (created_at);
+
+-- ------------------------------------------------------------
 -- password_resets: Reset-Links (Token nur als SHA-256-Hash)
 -- ------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS password_resets (

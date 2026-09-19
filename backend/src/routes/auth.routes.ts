@@ -12,9 +12,16 @@ import {
   forgotPassword,
   checkResetToken,
   resetPassword,
+  getAuthConfig,
+  register,
+  verifyEmail,
 } from '../controllers/auth.controller';
 
 const router = Router();
+
+router.get('/config', asyncHandler(getAuthConfig));
+router.post('/register', asyncHandler(register));
+router.post('/verify-email', asyncHandler(verifyEmail));
 
 router.post('/login', asyncHandler(login));
 router.post('/logout', asyncHandler(logout));

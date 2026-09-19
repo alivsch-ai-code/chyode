@@ -4,8 +4,9 @@ Basis-URL: `http://localhost:4000/api` (Produktion: `https://<domain>/api`)
 
 ## Authentifizierung
 
-Die App ist **invite-only**: Konten entstehen ausschließlich über eine Einladung eines
-Administrators. Angemeldet wird mit E-Mail und Passwort.
+Konten entstehen entweder per **Einladung** eines Administrators oder per **Selbstregistrierung**
+mit E-Mail-Bestätigung (abschaltbar über `REGISTRATION_ENABLED=false`). Angemeldet wird mit
+E-Mail und Passwort.
 
 - Nach dem Login setzt der Server ein **HttpOnly-, Secure-, SameSite=Lax-Cookie** (`tp_session`,
   JWT, 7 Tage). Der Client sendet es automatisch mit (`credentials: 'include'`); es gibt kein
@@ -23,6 +24,29 @@ Ersteller.
 ---
 
 ## Auth
+
+### `GET /auth/config`
+Öffentliche Einstellungen für die Oberfläche: `{ "registrationEnabled": true }`.
+
+### `POST /auth/register`
+Nimmt eine Registrierung entgegen. Es wird **noch kein Konto angelegt**: erst der Klick auf den
+Bestätigungslink aus der E-Mail (24 Stunden gültig, einmalig) erzeugt es.
+```json
+{ "name": "Anna", "email": "anna@example.com", "password": "mind. 10 Zeichen", "next": "/invite/abc123" }
+```
+`next` (optional, nur relative Pfade) ist das Ziel nach der Bestätigung. Die Antwort ist immer
+gleich (`200`), damit nicht erkennbar ist, welche Adressen schon registriert sind; existiert
+bereits ein Konto, geht stattdessen ein Hinweis an das Postfach. Pro Adresse höchstens eine Mail
+pro Minute, insgesamt höchstens `REGISTRATION_HOURLY_LIMIT` Anfragen pro Stunde (`429`).
+Bei geschlossener Registrierung `403`.
+
+### `POST /auth/verify-email`
+```json
+{ "token": "…" }
+```
+Bestätigt die Adresse, legt das Konto an (bzw. schaltet ein Altkonto ohne Passwort frei),
+ordnet frühere Gast-Teilnahmen zu und meldet an → `201 { "user": {…}, "next": "/invite/abc123" | null }`.
+Ungültig/abgelaufen → `404`, Konto existiert schon → `409`.
 
 ### `POST /auth/login`
 ```json

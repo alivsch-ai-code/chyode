@@ -18,16 +18,30 @@ import { sendMail } from '../services/mailer.service';
 import { inviteEmail, passwordResetEmail } from '../services/emailTemplates';
 
 async function main() {
-  const [emailArg, ...nameParts] = process.argv.slice(2);
+  const args = process.argv.slice(2);
+  const promoteOnly = args.includes('--promote-only');
+  const [emailArg, ...nameParts] = args.filter((arg) => arg !== '--promote-only');
   const email = emailArg?.trim().toLowerCase();
   const name = nameParts.join(' ').trim() || null;
 
   if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
-    console.error('Aufruf: node dist/scripts/bootstrap-admin.js <email> "<Name>"');
+    console.error('Aufruf: node dist/scripts/bootstrap-admin.js <email> "<Name>" [--promote-only]');
     process.exit(1);
   }
 
   const existing = await query<User>('SELECT * FROM users WHERE lower(email) = $1', [email]);
+
+  // Bereits registriertes Konto nur zum Admin befördern (kein Reset-Link, Sitzungen bleiben bestehen)
+  if (promoteOnly) {
+    if (!existing.rows[0]) {
+      console.error(`Kein Konto mit ${email} gefunden. Zuerst registrieren oder ohne --promote-only aufrufen.`);
+      process.exit(1);
+    }
+    await query("UPDATE users SET role = 'admin', status = 'active' WHERE id = $1", [existing.rows[0].id]);
+    console.log(`${email} ist jetzt Administrator.`);
+    return;
+  }
+
   const token = generateToken(32);
   let link: string;
   let mail;

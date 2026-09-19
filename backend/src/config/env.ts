@@ -31,6 +31,13 @@ export const env = {
   sessionTtlDays: parseInt(process.env.SESSION_TTL_DAYS ?? '7', 10),
   inviteTtlDays: parseInt(process.env.INVITE_TTL_DAYS ?? '7', 10),
   passwordResetTtlMin: parseInt(process.env.PASSWORD_RESET_TTL_MIN ?? '60', 10),
+
+  // Selbstregistrierung (E-Mail-Bestätigung, danach sofort nutzbar). Mit REGISTRATION_ENABLED=false
+  // ist die App wieder rein einladungsbasiert.
+  registrationEnabled: process.env.REGISTRATION_ENABLED !== 'false',
+  verificationTtlHours: parseInt(process.env.VERIFICATION_TTL_HOURS ?? '24', 10),
+  // Notbremse gegen Massenanmeldungen (schont die Reputation des Mail-Postfachs)
+  registrationHourlyLimit: parseInt(process.env.REGISTRATION_HOURLY_LIMIT ?? '30', 10),
   cookieSecure: frontendUrl.startsWith('https://'),
 
   rapidApiKey: process.env.RAPIDAPI_KEY ?? '',

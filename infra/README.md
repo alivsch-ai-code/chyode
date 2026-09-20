@@ -36,4 +36,4 @@ Bedarf anpassen.
 - `ufw`: nur 22/80/443 offen, Default-Deny eingehend
 - `fail2ban`: sshd-Jail, 5 Fehlversuche/10min → 1h Sperre
 - `unattended-upgrades`: automatische Sicherheitsupdates
-- Tägliches DB-Backup via Cronjob (`claude`-User): `pg_dump` → `/home/claude/backups/`, 7 Tage Aufbewahrung
+- DB-Backup alle 30 Minuten via Cronjob (`claude`-User, Skript `infra/backup-db.sh` → `/home/claude/backup-db.sh`, Crontab `*/30 * * * *`): `pg_dump` → `/home/claude/backups/` (nur für den Besitzer lesbar), 7 Tage Aufbewahrung

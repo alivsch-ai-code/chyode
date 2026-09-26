@@ -257,6 +257,40 @@ export function passwordChangedEmail(params: { name: string | null }): EmailCont
   return { subject: `Dein Passwort wurde geändert – ${env.appName}`, html, text };
 }
 
+export function reactivationEmail(params: { name: string | null; loginLink: string }): EmailContent {
+  const { name, loginLink } = params;
+  const appName = escapeHtml(env.appName);
+
+  const html = renderLayout({
+    preheader: `Neue Wochenenden warten – und bald mit direkter Hotelbuchung.`,
+    heading: 'Zeit für den nächsten gemeinsamen Trip',
+    paragraphs: [
+      name ? `Hallo ${escapeHtml(name)},` : 'Hallo,',
+      `in letzter Zeit ist es ruhig geworden im ${appName} – dabei plant es sich am besten, wenn alle mitmachen. Schau gern wieder vorbei: Vielleicht wartet schon ein neues Wochenende auf deine Stimme, oder du legst selbst eine neue Reise an.`,
+      'Außerdem tut sich einiges bei uns: Als Nächstes kommt die direkte Hotelbuchung in die App, damit ihr nach der Abstimmung nicht mehr selbst suchen müsst, sondern passende Unterkünfte direkt buchen könnt.',
+    ],
+    button: { label: 'Jetzt anmelden', url: loginLink },
+    footnote: `Du bekommst diese Nachricht, weil du ein Konto beim ${appName} hast. Dein Konto und deine Reisedaten kannst du jederzeit selbst im Bereich „Konto" löschen.`,
+  });
+
+  const text = [
+    name ? `Hallo ${name},` : 'Hallo,',
+    '',
+    `in letzter Zeit ist es ruhig geworden im ${env.appName} – dabei plant es sich am besten, wenn alle mitmachen.`,
+    'Schau gern wieder vorbei: Vielleicht wartet schon ein neues Wochenende auf deine Stimme, oder du legst selbst eine neue Reise an.',
+    '',
+    'Außerdem tut sich einiges bei uns: Als Nächstes kommt die direkte Hotelbuchung in die App, damit ihr nach der',
+    'Abstimmung nicht mehr selbst suchen müsst, sondern passende Unterkünfte direkt buchen könnt.',
+    '',
+    `Jetzt anmelden: ${loginLink}`,
+    '',
+    `Du bekommst diese Nachricht, weil du ein Konto beim ${env.appName} hast. Dein Konto und deine Reisedaten`,
+    'kannst du jederzeit selbst im Bereich „Konto" löschen.',
+  ].join('\n');
+
+  return { subject: `Zeit für den nächsten Trip – ${env.appName} ist wieder startklar`, html, text };
+}
+
 export function testEmail(): EmailContent {
   const html = renderLayout({
     preheader: 'Testnachricht',

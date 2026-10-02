@@ -4,9 +4,10 @@ import { useState, type FormEvent } from 'react';
 import useSWR from 'swr';
 import type { ActivityCategory, TripActivity } from '@shared/types';
 import { Button } from '@/components/ui/Button';
+import { Dialog } from '@/components/ui/Dialog';
 import { Input, Select, Textarea } from '@/components/ui/Field';
 import { Alert, Badge, EmptyState, Skeleton } from '@/components/ui/Feedback';
-import { IconCompass, IconExternal, IconTrash } from '@/components/ui/Icons';
+import { IconCompass, IconExternal, IconPlus, IconTrash } from '@/components/ui/Icons';
 import { useToast } from '@/components/ui/Toast';
 import { apiFetch, errorMessage } from '@/lib/api';
 import { ACTIVITY_CATEGORIES, ACTIVITY_CATEGORY_LABELS } from '@/lib/catalog';
@@ -42,6 +43,7 @@ export function ActivitiesTab({ tripId, myParticipantId }: { tripId: string; myP
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [filter, setFilter] = useState<ActivityCategory | 'all'>('all');
+  const [open, setOpen] = useState(false);
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
@@ -71,6 +73,7 @@ export function ActivitiesTab({ tripId, myParticipantId }: { tripId: string; myP
       setPrice('');
       setDescription('');
       setLink('');
+      setOpen(false);
       await mutate();
       toast('Aktivität hinzugefügt', 'success');
     } catch (err) {
@@ -98,81 +101,93 @@ export function ActivitiesTab({ tripId, myParticipantId }: { tripId: string; myP
 
   return (
     <div className="space-y-8">
-      <div>
-        <h2 className="text-title2">Aktivitäten in der Nähe</h2>
-        <p className="mt-1 text-callout text-secondary">
-          Sammelt gemeinsam Ideen, was ihr vor Ort unternehmen wollt – von der Wanderroute bis zum Saunagang.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-title2">Aktivitäten in der Nähe</h2>
+          <p className="mt-1 text-callout text-secondary">
+            Sammelt gemeinsam Ideen, was ihr vor Ort unternehmen wollt – von der Wanderroute bis zum Saunagang.
+          </p>
+        </div>
+        <Button icon={<IconPlus size={18} />} onClick={() => setOpen(true)}>
+          Hinzufügen
+        </Button>
       </div>
 
-      <form onSubmit={onSubmit} className="card space-y-5 p-5 sm:p-6" noValidate>
-        {formError && <Alert tone="error">{formError}</Alert>}
-        <Input label="Titel" placeholder="z. B. Schneeschuhwanderung zur Galsterberghütte" maxLength={200} value={title} onChange={(e) => setTitle(e.target.value)} />
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Select label="Kategorie" optional value={category} onChange={(e) => setCategory(e.target.value as ActivityCategory | '')}>
-            <option value="">Keine Angabe</option>
-            {ACTIVITY_CATEGORIES.map((c) => (
-              <option key={c.key} value={c.key}>
-                {c.label}
-              </option>
-            ))}
-          </Select>
-          <Input
-            label="Preis pro Person"
+      <Dialog open={open} onClose={() => setOpen(false)} title="Aktivität hinzufügen">
+        <form onSubmit={onSubmit} className="space-y-5 p-5 sm:p-6" noValidate>
+          {formError && <Alert tone="error">{formError}</Alert>}
+          <Input label="Titel" placeholder="z. B. Schneeschuhwanderung zur Galsterberghütte" maxLength={200} value={title} onChange={(e) => setTitle(e.target.value)} />
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Select label="Kategorie" optional value={category} onChange={(e) => setCategory(e.target.value as ActivityCategory | '')}>
+              <option value="">Keine Angabe</option>
+              {ACTIVITY_CATEGORIES.map((c) => (
+                <option key={c.key} value={c.key}>
+                  {c.label}
+                </option>
+              ))}
+            </Select>
+            <Input
+              label="Preis pro Person"
+              optional
+              type="number"
+              inputMode="decimal"
+              min={0}
+              step="0.01"
+              placeholder="in Euro"
+              value={price}
+              onChange={(e) => setPrice(e.target.value)}
+            />
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Input
+              label="Entfernung"
+              optional
+              type="number"
+              inputMode="decimal"
+              min={0}
+              step="0.1"
+              placeholder="in km"
+              value={distance}
+              onChange={(e) => setDistance(e.target.value)}
+            />
+            <Input
+              label="Dauer"
+              optional
+              type="number"
+              inputMode="numeric"
+              min={0}
+              placeholder="in Minuten"
+              value={duration}
+              onChange={(e) => setDuration(e.target.value)}
+            />
+          </div>
+          <Textarea
+            label="Beschreibung"
             optional
-            type="number"
-            inputMode="decimal"
-            min={0}
-            step="0.01"
-            placeholder="in Euro"
-            value={price}
-            onChange={(e) => setPrice(e.target.value)}
-          />
-        </div>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Input
-            label="Entfernung"
-            optional
-            type="number"
-            inputMode="decimal"
-            min={0}
-            step="0.1"
-            placeholder="in km"
-            value={distance}
-            onChange={(e) => setDistance(e.target.value)}
+            rows={2}
+            maxLength={500}
+            placeholder="z. B. Dauer, Schwierigkeit, Treffpunkt"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
           />
           <Input
-            label="Dauer"
+            label="Link"
             optional
-            type="number"
-            inputMode="numeric"
-            min={0}
-            placeholder="in Minuten"
-            value={duration}
-            onChange={(e) => setDuration(e.target.value)}
+            placeholder="z. B. Google-Maps-Route oder Veranstalter-Website"
+            maxLength={500}
+            value={link}
+            onChange={(e) => setLink(e.target.value)}
           />
-        </div>
-        <Textarea
-          label="Beschreibung"
-          optional
-          rows={2}
-          maxLength={500}
-          placeholder="z. B. Dauer, Schwierigkeit, Treffpunkt"
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-        />
-        <Input
-          label="Link"
-          optional
-          placeholder="z. B. Google-Maps-Route oder Veranstalter-Website"
-          maxLength={500}
-          value={link}
-          onChange={(e) => setLink(e.target.value)}
-        />
-        <Button type="submit" loading={saving} disabled={!title.trim()}>
-          Aktivität hinzufügen
-        </Button>
-      </form>
+          <div className="flex justify-end gap-3">
+            <Button type="button" variant="plain" onClick={() => setOpen(false)}>
+              Abbrechen
+            </Button>
+            <Button type="submit" loading={saving} disabled={!title.trim()}>
+              Aktivität hinzufügen
+            </Button>
+          </div>
+        </form>
+      </Dialog>
 
       {activities.length > 0 && (
         <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Nach Kategorie filtern">

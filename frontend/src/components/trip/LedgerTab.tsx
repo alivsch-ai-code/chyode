@@ -4,9 +4,10 @@ import { useState, type FormEvent } from 'react';
 import useSWR from 'swr';
 import type { LedgerSummary, Trip, TripExpense, TripParticipant, TripSettlement } from '@shared/types';
 import { Button } from '@/components/ui/Button';
+import { Dialog } from '@/components/ui/Dialog';
 import { Input, Select, Textarea } from '@/components/ui/Field';
 import { Alert, Avatar, Badge, EmptyState, Skeleton } from '@/components/ui/Feedback';
-import { IconCheck, IconReceipt, IconScale, IconTrash } from '@/components/ui/Icons';
+import { IconCheck, IconPlus, IconReceipt, IconScale, IconTrash } from '@/components/ui/Icons';
 import { useToast } from '@/components/ui/Toast';
 import { API_URL, apiFetch, errorMessage } from '@/lib/api';
 import { formatDateTime, formatMoney } from '@/lib/format';
@@ -44,6 +45,7 @@ export function LedgerTab({
   const [expenseError, setExpenseError] = useState<string | null>(null);
   const [savingExpense, setSavingExpense] = useState(false);
   const [busyExpenseId, setBusyExpenseId] = useState<string | null>(null);
+  const [expenseOpen, setExpenseOpen] = useState(false);
 
   async function onAddExpense(event: FormEvent) {
     event.preventDefault();
@@ -62,6 +64,7 @@ export function LedgerTab({
       setAmount('');
       setPaidBy(myParticipantId);
       setReceipt(null);
+      setExpenseOpen(false);
       await refreshAll();
       toast('Ausgabe eingetragen', 'success');
     } catch (err) {
@@ -90,6 +93,7 @@ export function LedgerTab({
   const [settleError, setSettleError] = useState<string | null>(null);
   const [savingSettlement, setSavingSettlement] = useState(false);
   const [busySettlementId, setBusySettlementId] = useState<string | null>(null);
+  const [settleOpen, setSettleOpen] = useState(false);
 
   async function recordSettlement(toTripUserId: string, value: number, note?: string) {
     await apiFetch(settlementsKey, { method: 'POST', body: { toTripUserId, amount: value, note } });
@@ -106,6 +110,7 @@ export function LedgerTab({
       await recordSettlement(settleTo, value, settleNote.trim() || undefined);
       setSettleAmount('');
       setSettleNote('');
+      setSettleOpen(false);
       toast('Zahlung eingetragen', 'success');
     } catch (err) {
       setSettleError(errorMessage(err));
@@ -212,9 +217,14 @@ export function LedgerTab({
       </section>
 
       <section className="card space-y-5 p-5 sm:p-6" aria-labelledby="expenses-heading">
-        <h3 id="expenses-heading" className="text-headline">
-          Ausgaben
-        </h3>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h3 id="expenses-heading" className="text-headline">
+            Ausgaben
+          </h3>
+          <Button size="sm" icon={<IconPlus size={16} />} onClick={() => setExpenseOpen(true)}>
+            Ausgabe eintragen
+          </Button>
+        </div>
 
         {accommodationAmount !== null ? (
           <div className="flex items-center justify-between rounded-control bg-grouped px-3.5 py-3">
@@ -235,9 +245,9 @@ export function LedgerTab({
           )
         )}
 
-        <form onSubmit={onAddExpense} className="space-y-4" noValidate encType="multipart/form-data">
-          {expenseError && <Alert tone="error">{expenseError}</Alert>}
-          <div className="grid gap-4 sm:grid-cols-2">
+        <Dialog open={expenseOpen} onClose={() => setExpenseOpen(false)} title="Ausgabe eintragen">
+          <form onSubmit={onAddExpense} className="space-y-4 p-5 sm:p-6" noValidate encType="multipart/form-data">
+            {expenseError && <Alert tone="error">{expenseError}</Alert>}
             <Input
               label="Wofür?"
               placeholder="z. B. Taxi, Konzertkarten"
@@ -245,25 +255,25 @@ export function LedgerTab({
               value={description}
               onChange={(e) => setDescription(e.target.value)}
             />
-            <Input
-              label="Betrag"
-              type="number"
-              inputMode="decimal"
-              min={0}
-              step="0.01"
-              placeholder="in Euro"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-            />
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Select label="Wer hat bezahlt?" value={paidBy} onChange={(e) => setPaidBy(e.target.value)}>
-              {participants.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.id === myParticipantId ? `${p.name} (du)` : p.name}
-                </option>
-              ))}
-            </Select>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Input
+                label="Betrag"
+                type="number"
+                inputMode="decimal"
+                min={0}
+                step="0.01"
+                placeholder="in Euro"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+              />
+              <Select label="Wer hat bezahlt?" value={paidBy} onChange={(e) => setPaidBy(e.target.value)}>
+                {participants.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.id === myParticipantId ? `${p.name} (du)` : p.name}
+                  </option>
+                ))}
+              </Select>
+            </div>
             <div>
               <label className="mb-1.5 block text-subhead font-medium text-label">
                 Beleg <span className="ml-1.5 font-normal text-secondary">optional</span>
@@ -275,11 +285,16 @@ export function LedgerTab({
                 className="block w-full text-footnote text-secondary file:mr-3 file:rounded-full file:border-0 file:bg-fill/15 file:px-4 file:py-2 file:text-subhead file:font-medium file:text-label"
               />
             </div>
-          </div>
-          <Button type="submit" loading={savingExpense} disabled={!description.trim() || !amount}>
-            Ausgabe eintragen
-          </Button>
-        </form>
+            <div className="flex justify-end gap-3">
+              <Button type="button" variant="plain" onClick={() => setExpenseOpen(false)}>
+                Abbrechen
+              </Button>
+              <Button type="submit" loading={savingExpense} disabled={!description.trim() || !amount}>
+                Ausgabe eintragen
+              </Button>
+            </div>
+          </form>
+        </Dialog>
 
         {!expensesData ? (
           <Skeleton className="h-16" />
@@ -328,15 +343,23 @@ export function LedgerTab({
 
       {otherParticipants.length > 0 && (
         <section className="card space-y-5 p-5 sm:p-6" aria-labelledby="settle-heading">
-          <h3 id="settle-heading" className="text-headline">
-            Zahlung eintragen
-          </h3>
-          <p className="text-footnote text-secondary">
-            Hast du schon bar oder per Überweisung bezahlt? Trag es hier ein, dann stimmen die Salden wieder.
-          </p>
-          <form onSubmit={onAddSettlement} className="space-y-4" noValidate>
-            {settleError && <Alert tone="error">{settleError}</Alert>}
-            <div className="grid gap-4 sm:grid-cols-2">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h3 id="settle-heading" className="text-headline">
+                Zahlungen
+              </h3>
+              <p className="mt-0.5 text-footnote text-secondary">
+                Hast du schon bar oder per Überweisung bezahlt? Trag es ein, dann stimmen die Salden wieder.
+              </p>
+            </div>
+            <Button size="sm" icon={<IconPlus size={16} />} onClick={() => setSettleOpen(true)}>
+              Zahlung eintragen
+            </Button>
+          </div>
+
+          <Dialog open={settleOpen} onClose={() => setSettleOpen(false)} title="Zahlung eintragen">
+            <form onSubmit={onAddSettlement} className="space-y-4 p-5 sm:p-6" noValidate>
+              {settleError && <Alert tone="error">{settleError}</Alert>}
               <Select label="An wen hast du gezahlt?" value={settleTo} onChange={(e) => setSettleTo(e.target.value)}>
                 {otherParticipants.map((p) => (
                   <option key={p.id} value={p.id}>
@@ -354,20 +377,25 @@ export function LedgerTab({
                 value={settleAmount}
                 onChange={(e) => setSettleAmount(e.target.value)}
               />
-            </div>
-            <Textarea
-              label="Notiz"
-              optional
-              rows={2}
-              maxLength={300}
-              placeholder="z. B. Bar beim Frühstück"
-              value={settleNote}
-              onChange={(e) => setSettleNote(e.target.value)}
-            />
-            <Button type="submit" loading={savingSettlement} disabled={!settleTo || !settleAmount}>
-              Zahlung eintragen
-            </Button>
-          </form>
+              <Textarea
+                label="Notiz"
+                optional
+                rows={2}
+                maxLength={300}
+                placeholder="z. B. Bar beim Frühstück"
+                value={settleNote}
+                onChange={(e) => setSettleNote(e.target.value)}
+              />
+              <div className="flex justify-end gap-3">
+                <Button type="button" variant="plain" onClick={() => setSettleOpen(false)}>
+                  Abbrechen
+                </Button>
+                <Button type="submit" loading={savingSettlement} disabled={!settleTo || !settleAmount}>
+                  Zahlung eintragen
+                </Button>
+              </div>
+            </form>
+          </Dialog>
 
           {settlementsData && settlementsData.settlements.length > 0 && (
             <ul className="space-y-2 border-t border-line/60 pt-4">

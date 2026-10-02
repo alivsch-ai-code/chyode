@@ -3,23 +3,25 @@
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import useSWR from 'swr';
-import type { DateOption, TripDetailResponse } from '@shared/types';
+import type { DateOption, LedgerSummary, TripDetailResponse } from '@shared/types';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/Dialog';
-import { Alert, Avatar, Badge } from '@/components/ui/Feedback';
-import { IconCopy, IconLink, IconLock, IconTrash } from '@/components/ui/Icons';
+import { Alert, Avatar, Badge, Skeleton } from '@/components/ui/Feedback';
+import { IconCheck, IconCopy, IconLink, IconLock, IconReceipt, IconTrash } from '@/components/ui/Icons';
 import { useToast } from '@/components/ui/Toast';
 import { apiFetch } from '@/lib/api';
 import { copyToClipboard } from '@/lib/clipboard';
-import { TRIP_STATUS_LABELS, TRIP_TYPE_LABELS, formatDateRange, formatDateTime, pluralize } from '@/lib/format';
+import { TRIP_STATUS_LABELS, TRIP_TYPE_LABELS, formatDateRange, formatDateTime, formatMoney, pluralize } from '@/lib/format';
 
 export function OverviewTab({
   detail,
   onChanged,
+  onOpenLedger,
   isNew,
 }: {
   detail: TripDetailResponse;
   onChanged: () => Promise<unknown>;
+  onOpenLedger: () => void;
   isNew: boolean;
 }) {
   const { trip, participants, myRole, inviteLink, progress } = detail;
@@ -27,6 +29,7 @@ export function OverviewTab({
   const router = useRouter();
   const options = useSWR<{ dateOptions: DateOption[] }>(`/trips/${trip.id}/date-options`);
   const config = useSWR<{ tripRetentionDays: number; tripMaxAgeDays: number }>('/auth/config');
+  const ledger = useSWR<LedgerSummary>(`/trips/${trip.id}/balances`);
   const [confirmClose, setConfirmClose] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [reopening, setReopening] = useState(false);
@@ -195,6 +198,35 @@ export function OverviewTab({
             Aktivitäten und Unterkunft.
           </p>
         )}
+      </section>
+
+      <section className="card p-6 sm:p-8" aria-labelledby="payment-heading">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="min-w-0">
+            <h2 id="payment-heading" className="text-title3">
+              Zahlungsstatus
+            </h2>
+            {!ledger.data ? (
+              <div className="mt-2 w-48">
+                <Skeleton className="h-5" />
+              </div>
+            ) : ledger.data.totalExpenses === 0 ? (
+              <p className="mt-1 text-callout text-secondary">Noch keine Ausgaben erfasst.</p>
+            ) : ledger.data.settled ? (
+              <p className="mt-1 flex items-center gap-1.5 text-callout text-success">
+                <IconCheck size={16} /> Alle Schulden beglichen ({formatMoney(ledger.data.totalExpenses)} insgesamt).
+              </p>
+            ) : (
+              <p className="mt-1 text-callout text-secondary">
+                Noch offen: {formatMoney(ledger.data.suggestions.reduce((sum, s) => sum + s.amount, 0))} von{' '}
+                {formatMoney(ledger.data.totalExpenses)}.
+              </p>
+            )}
+          </div>
+          <Button variant="tinted" size="sm" icon={<IconReceipt size={16} />} onClick={onOpenLedger}>
+            Zur Kasse
+          </Button>
+        </div>
       </section>
 
       {isCreator && progress && (

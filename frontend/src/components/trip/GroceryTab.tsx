@@ -4,6 +4,7 @@ import { useMemo, useState, type FormEvent } from 'react';
 import useSWR from 'swr';
 import type { GrocerySummary, GroceryItem, MealCategory } from '@shared/types';
 import { Button } from '@/components/ui/Button';
+import { Dialog } from '@/components/ui/Dialog';
 import { Input, Select, Textarea } from '@/components/ui/Field';
 import { Alert, Badge, EmptyState, Skeleton } from '@/components/ui/Feedback';
 import { IconCheck, IconPlus, IconTrash, IconUtensils } from '@/components/ui/Icons';
@@ -34,6 +35,7 @@ export function GroceryTab({ tripId, myParticipantId }: { tripId: string; myPart
   const [busyId, setBusyId] = useState<string | null>(null);
   const [addingSuggestion, setAddingSuggestion] = useState<string | null>(null);
   const [splitMode, setSplitMode] = useState<SplitMode>('even');
+  const [open, setOpen] = useState(false);
 
   async function addItem(payload: { item: string; quantity?: string; category?: MealCategory; price?: number }) {
     await apiFetch(key, { method: 'POST', body: payload });
@@ -61,6 +63,7 @@ export function GroceryTab({ tripId, myParticipantId }: { tripId: string; myPart
       setQuantity('');
       setNote('');
       setPrice('');
+      setOpen(false);
       await Promise.all([mutate(), mutateSummary()]);
       toast('Zur Einkaufsliste hinzugefügt', 'success');
     } catch (err) {
@@ -148,19 +151,28 @@ export function GroceryTab({ tripId, myParticipantId }: { tripId: string; myPart
     [summary, myParticipantId]
   );
 
+  const [view, setView] = useState<'all' | 'mine'>('all');
+  const myItems = useMemo(() => items.filter((i) => i.claimed_by === myParticipantId), [items, myParticipantId]);
+  const myOpenCount = myItems.filter((i) => !i.checked_at).length;
+
   return (
     <div className="space-y-8">
-      <div>
-        <h2 className="text-title2">Essen &amp; Einkaufsliste</h2>
-        <p className="mt-1 text-callout text-secondary">
-          Trag ein, was du zum Essen oder Trinken brauchst – daraus entsteht die gemeinsame Einkaufsliste, gruppiert
-          nach Mahlzeit. Mit Preis rechnet sich die Kostenaufteilung von selbst aus.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-title2">Essen &amp; Einkaufsliste</h2>
+          <p className="mt-1 text-callout text-secondary">
+            Trag ein, was du zum Essen oder Trinken brauchst – daraus entsteht die gemeinsame Einkaufsliste, gruppiert
+            nach Mahlzeit. Mit Preis rechnet sich die Kostenaufteilung von selbst aus.
+          </p>
+        </div>
+        <Button icon={<IconPlus size={18} />} onClick={() => setOpen(true)}>
+          Hinzufügen
+        </Button>
       </div>
 
-      <form onSubmit={onSubmit} className="card space-y-5 p-5 sm:p-6" noValidate>
-        {formError && <Alert tone="error">{formError}</Alert>}
-        <div className="grid gap-4 sm:grid-cols-2">
+      <Dialog open={open} onClose={() => setOpen(false)} title="Zur Einkaufsliste hinzufügen">
+        <form onSubmit={onSubmit} className="space-y-5 p-5 sm:p-6" noValidate>
+          {formError && <Alert tone="error">{formError}</Alert>}
           <Input
             label="Was brauchst du?"
             placeholder="z. B. Milch, Grillfleisch, Bier"
@@ -168,24 +180,24 @@ export function GroceryTab({ tripId, myParticipantId }: { tripId: string; myPart
             value={item}
             onChange={(e) => setItem(e.target.value)}
           />
-          <Select label="Kategorie" optional value={category} onChange={(e) => setCategory(e.target.value as MealCategory | '')}>
-            <option value="">Keine Angabe</option>
-            {MEAL_CATEGORIES.map((c) => (
-              <option key={c.key} value={c.key}>
-                {c.label}
-              </option>
-            ))}
-          </Select>
-        </div>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Input
-            label="Menge"
-            optional
-            placeholder="z. B. 2 Packungen"
-            maxLength={60}
-            value={quantity}
-            onChange={(e) => setQuantity(e.target.value)}
-          />
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Select label="Kategorie" optional value={category} onChange={(e) => setCategory(e.target.value as MealCategory | '')}>
+              <option value="">Keine Angabe</option>
+              {MEAL_CATEGORIES.map((c) => (
+                <option key={c.key} value={c.key}>
+                  {c.label}
+                </option>
+              ))}
+            </Select>
+            <Input
+              label="Menge"
+              optional
+              placeholder="z. B. 2 Packungen"
+              maxLength={60}
+              value={quantity}
+              onChange={(e) => setQuantity(e.target.value)}
+            />
+          </div>
           <Input
             label="Preis"
             optional
@@ -197,20 +209,25 @@ export function GroceryTab({ tripId, myParticipantId }: { tripId: string; myPart
             value={price}
             onChange={(e) => setPrice(e.target.value)}
           />
-        </div>
-        <Textarea
-          label="Notiz"
-          optional
-          rows={2}
-          maxLength={300}
-          placeholder="z. B. Allergie, bitte laktosefrei"
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-        />
-        <Button type="submit" loading={saving} disabled={!item.trim()}>
-          Zur Liste hinzufügen
-        </Button>
-      </form>
+          <Textarea
+            label="Notiz"
+            optional
+            rows={2}
+            maxLength={300}
+            placeholder="z. B. Allergie, bitte laktosefrei"
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+          />
+          <div className="flex justify-end gap-3">
+            <Button type="button" variant="plain" onClick={() => setOpen(false)}>
+              Abbrechen
+            </Button>
+            <Button type="submit" loading={saving} disabled={!item.trim()}>
+              Zur Liste hinzufügen
+            </Button>
+          </div>
+        </form>
+      </Dialog>
 
       <section aria-label="Schnellauswahl" className="space-y-3">
         {MEAL_CATEGORIES.map((c) => {
@@ -290,18 +307,60 @@ export function GroceryTab({ tripId, myParticipantId }: { tripId: string; myPart
             </EmptyState>
           </div>
         )}
-        {groups.map((group) => (
-          <GroceryGroup
-            key={group.key}
-            groupKey={group.key}
-            items={group.items}
-            myParticipantId={myParticipantId}
-            busyId={busyId}
-            onToggle={toggle}
-            onClaim={claim}
-            onDelete={remove}
+        {items.length > 0 && (
+          <Segmented
+            ariaLabel="Ansicht wählen"
+            value={view}
+            onChange={setView}
+            options={[
+              { value: 'all', label: 'Ganze Liste' },
+              { value: 'mine', label: `Was ich kaufe${myItems.length > 0 ? ` (${myItems.length})` : ''}` },
+            ]}
           />
-        ))}
+        )}
+        {view === 'mine' ? (
+          myItems.length === 0 ? (
+            <div className="card">
+              <EmptyState icon={<IconCheck size={24} />} title="Du hast noch nichts beansprucht">
+                Tippe bei einem Artikel auf „Ich kaufe das“ – er erscheint dann hier als deine persönliche
+                Einkaufsliste.
+              </EmptyState>
+            </div>
+          ) : (
+            <>
+              {myOpenCount > 0 && (
+                <p className="text-footnote text-secondary">Noch {myOpenCount} Artikel zu besorgen.</p>
+              )}
+              <ul className="space-y-2.5">
+                {myItems.map((entry) => (
+                  <GroceryRow
+                    key={entry.id}
+                    entry={entry}
+                    mine={entry.trip_user_id === myParticipantId}
+                    myParticipantId={myParticipantId}
+                    busy={busyId === entry.id}
+                    onToggle={() => toggle(entry)}
+                    onClaim={() => claim(entry)}
+                    onDelete={() => remove(entry)}
+                  />
+                ))}
+              </ul>
+            </>
+          )
+        ) : (
+          groups.map((group) => (
+            <GroceryGroup
+              key={group.key}
+              groupKey={group.key}
+              items={group.items}
+              myParticipantId={myParticipantId}
+              busyId={busyId}
+              onToggle={toggle}
+              onClaim={claim}
+              onDelete={remove}
+            />
+          ))
+        )}
       </section>
     </div>
   );

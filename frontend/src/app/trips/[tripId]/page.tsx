@@ -203,7 +203,9 @@ export default function TripPage({ params }: { params: { tripId: string } }) {
       </div>
 
       <div id={`trip-panel-${tab}`} role="tabpanel" aria-labelledby={`trip-tab-${tab}`} tabIndex={0} className="outline-none">
-        {tab === 'overview' && <OverviewTab detail={data} onChanged={() => mutate()} isNew={isNew} />}
+        {tab === 'overview' && (
+          <OverviewTab detail={data} onChanged={() => mutate()} onOpenLedger={() => changeTab('ledger')} isNew={isNew} />
+        )}
         {tab === 'dates' && (
           <DatesTab
             tripId={trip.id}

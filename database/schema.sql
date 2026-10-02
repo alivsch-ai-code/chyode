@@ -98,6 +98,16 @@ CREATE TABLE IF NOT EXISTS trips (
   results_released_at TIMESTAMPTZ,        -- solange NULL, sehen nur Ersteller die Auswertung
   results_notified_at TIMESTAMPTZ,        -- Teilnehmer wurden per Mail über das Ergebnis informiert
   voting_closed_at    TIMESTAMPTZ,        -- Beginn der automatischen Löschfrist
+  -- fest ausgewählte Unterkunft (unabhängig von der Vorschlagssuche, z. B. manuell gebucht)
+  accommodation_title     TEXT,
+  accommodation_address   TEXT,
+  accommodation_url       TEXT,
+  accommodation_image_url TEXT,
+  accommodation_note      TEXT,
+  accommodation_rating    NUMERIC(2, 1) CHECK (accommodation_rating BETWEEN 0 AND 5),
+  accommodation_amenities TEXT[] NOT NULL DEFAULT '{}',
+  accommodation_picked_by UUID,                -- verweist auf trip_users(id); FK folgt unten (trip_users existiert erst danach)
+  accommodation_picked_at TIMESTAMPTZ,
   created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at          TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -122,6 +132,11 @@ CREATE TABLE IF NOT EXISTS trip_users (
 
 CREATE INDEX IF NOT EXISTS idx_trip_users_trip_id ON trip_users(trip_id);
 CREATE INDEX IF NOT EXISTS idx_trip_users_session_token ON trip_users(session_token);
+
+-- trips.accommodation_picked_by verweist erst jetzt auf trip_users, da die Tabelle vorher noch nicht existierte
+ALTER TABLE trips ADD CONSTRAINT trips_accommodation_picked_by_fkey
+  FOREIGN KEY (accommodation_picked_by) REFERENCES trip_users(id) ON DELETE SET NULL;
+
 -- ein Account kann pro Trip nur einmal Teilnehmer sein
 CREATE UNIQUE INDEX IF NOT EXISTS idx_trip_users_trip_user
   ON trip_users (trip_id, user_id) WHERE user_id IS NOT NULL;

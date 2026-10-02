@@ -20,6 +20,7 @@ export type TripStatus = 'voting' | 'closed' | 'booked';
 export type ParticipantRole = 'creator' | 'participant';
 export type NoteCategory = 'wish' | 'idea' | 'requirement';
 export type SearchProvider = 'booking' | 'airbnb' | 'rapidapi';
+export type ActivityCategory = 'wellness' | 'nature' | 'sport' | 'food';
 
 export interface Trip {
   id: string;
@@ -37,8 +38,53 @@ export interface Trip {
   results_released_at: string | null;
   results_notified_at: string | null;
   voting_closed_at: string | null;
+  accommodation_title: string | null;
+  accommodation_address: string | null;
+  accommodation_url: string | null;
+  accommodation_image_url: string | null;
+  accommodation_note: string | null;
+  accommodation_rating: string | null;
+  accommodation_amenities: string[];
+  accommodation_picked_by: string | null;
+  accommodation_picked_at: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface GroceryItem {
+  id: string;
+  trip_id: string;
+  trip_user_id: string;
+  item: string;
+  quantity: string | null;
+  note: string | null;
+  price: string | null;
+  checked_at: string | null;
+  checked_by: string | null;
+  created_at: string;
+  added_by_name?: string;
+  checked_by_name?: string | null;
+}
+
+export interface GrocerySummary {
+  total: number;
+  participantCount: number;
+  perPersonEven: number;
+  byPerson: { tripUserId: string; name: string; spent: number }[];
+}
+
+export interface TripActivity {
+  id: string;
+  trip_id: string;
+  trip_user_id: string;
+  title: string;
+  category: ActivityCategory | null;
+  distance_km: string | null;
+  price: string | null;
+  description: string | null;
+  link: string | null;
+  created_at: string;
+  added_by_name?: string;
 }
 
 export interface TripUser {

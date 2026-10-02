@@ -33,7 +33,11 @@ abstimmen, Wünsche notieren, Ideen für die Berge entdecken und passende Unterk
 5. Die **Auswertung** (Favorit, Budget-Statistik mit Median/Durchschnitt/Min/Max, Erlebnis- und
    Unterkunftswünsche) sieht der Ersteller sofort, Teilnehmer erst, wenn er sie **freigibt**.
    Sobald das Ergebnis freigegeben ist und alle abgestimmt haben, bekommen alle eine E-Mail.
-6. Der Ersteller startet die **Unterkunftssuche**; ein Tab mit kuratierten **Berg-Ideen** (nach
+6. Der Ersteller startet die **Unterkunftssuche** oder trägt die bereits gebuchte Unterkunft fest
+   ein (Name, Adresse, Bewertung, Ausstattung, Link) – sichtbar für alle, auch vor der Freigabe.
+7. Vor Ort helfen zwei weitere Tabs: eine gemeinsame **Einkaufsliste** (mit Preis und
+   Kostenaufteilung, gleichmäßig oder nach eigenen Wünschen) und gesammelte **Aktivitäten** in der
+   Nähe (Kategorie, Entfernung, Preis, Link). Ein Tab mit kuratierten **Berg-Ideen** (nach
    Jahreszeit und Wünschen sortiert, mit Google-Maps-Links) liefert zusätzliche Inspiration.
 
 ## Datenschutz

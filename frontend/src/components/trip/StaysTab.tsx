@@ -1,13 +1,14 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import useSWR from 'swr';
-import type { AccommodationSuggestion } from '@shared/types';
+import type { AccommodationSuggestion, Trip } from '@shared/types';
 import { AccommodationCard } from '@/components/AccommodationCard';
 import { Button } from '@/components/ui/Button';
-import { Alert, EmptyState, Skeleton } from '@/components/ui/Feedback';
-import { IconBed, IconEyeLock, IconRefresh } from '@/components/ui/Icons';
-import { Input } from '@/components/ui/Field';
+import { Dialog } from '@/components/ui/Dialog';
+import { Alert, Badge, EmptyState, Skeleton } from '@/components/ui/Feedback';
+import { IconBed, IconExternal, IconEyeLock, IconPlus, IconRefresh, IconSparkles, IconTrash } from '@/components/ui/Icons';
+import { Input, Textarea } from '@/components/ui/Field';
 import { useToast } from '@/components/ui/Toast';
 import { apiFetch, errorMessage } from '@/lib/api';
 import { formatDateTime } from '@/lib/format';
@@ -24,10 +25,14 @@ export function StaysTab({
   tripId,
   isCreator,
   canSeeResults,
+  trip,
+  onTripChanged,
 }: {
   tripId: string;
   isCreator: boolean;
   canSeeResults: boolean;
+  trip: Trip;
+  onTripChanged: () => void;
 }) {
   const { toast } = useToast();
   const key = `/trips/${tripId}/accommodations`;
@@ -58,18 +63,6 @@ export function StaysTab({
     }
   }
 
-  if (!canSeeResults) {
-    return (
-      <div className="card">
-        <EmptyState icon={<IconEyeLock size={28} />} title="Unterkunftsvorschläge folgen">
-          Die Vorschläge basieren auf dem Gruppenergebnis und erscheinen, sobald der Ersteller die Auswertung freigibt.
-        </EmptyState>
-      </div>
-    );
-  }
-  if (isLoading) return <Skeleton className="h-56" />;
-  if (error) return <Alert tone="error">{errorMessage(error)}</Alert>;
-
   const top = data?.topSuggestions ?? [];
   const rest = (data?.allSuggestions ?? []).slice(top.length);
 
@@ -78,9 +71,25 @@ export function StaysTab({
       <div>
         <h2 className="text-title2">Unterkünfte</h2>
         <p className="mt-1 text-callout text-secondary">
-          Passende Angebote für das Favoriten-Wochenende – ausgewählt nach Gruppengröße, Preis und den genannten Wünschen.
+          Die fest ausgewählte Unterkunft steht für alle sichtbar oben. Passende Vorschläge für das Favoriten-Wochenende
+          folgen darunter, sobald der Ersteller die Auswertung freigibt.
         </p>
       </div>
+
+      <AccommodationPick tripId={tripId} trip={trip} isCreator={isCreator} onChanged={onTripChanged} />
+
+      {!canSeeResults ? (
+        <div className="card">
+          <EmptyState icon={<IconEyeLock size={28} />} title="Unterkunftsvorschläge folgen">
+            Die Vorschläge basieren auf dem Gruppenergebnis und erscheinen, sobald der Ersteller die Auswertung freigibt.
+          </EmptyState>
+        </div>
+      ) : isLoading ? (
+        <Skeleton className="h-56" />
+      ) : error ? (
+        <Alert tone="error">{errorMessage(error)}</Alert>
+      ) : (
+        <>
 
       {data?.demo && (
         <Alert tone="warning" title="Beispieldaten">
@@ -160,6 +169,206 @@ export function StaysTab({
           )}
         </section>
       )}
+        </>
+      )}
     </div>
+  );
+}
+
+function AccommodationPick({
+  tripId,
+  trip,
+  isCreator,
+  onChanged,
+}: {
+  tripId: string;
+  trip: Trip;
+  isCreator: boolean;
+  onChanged: () => void;
+}) {
+  const { toast } = useToast();
+  const [open, setOpen] = useState(false);
+  const [title, setTitle] = useState('');
+  const [address, setAddress] = useState('');
+  const [url, setUrl] = useState('');
+  const [imageUrl, setImageUrl] = useState('');
+  const [note, setNote] = useState('');
+  const [rating, setRating] = useState('');
+  const [amenities, setAmenities] = useState('');
+  const [formError, setFormError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [clearing, setClearing] = useState(false);
+
+  const picked = Boolean(trip.accommodation_title);
+
+  useEffect(() => {
+    if (!open) return;
+    setTitle(trip.accommodation_title ?? '');
+    setAddress(trip.accommodation_address ?? '');
+    setUrl(trip.accommodation_url ?? '');
+    setImageUrl(trip.accommodation_image_url ?? '');
+    setNote(trip.accommodation_note ?? '');
+    setRating(trip.accommodation_rating ?? '');
+    setAmenities((trip.accommodation_amenities ?? []).join(', '));
+    setFormError(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  async function onSubmit(event: FormEvent) {
+    event.preventDefault();
+    if (!title.trim()) return;
+    setFormError(null);
+    setSaving(true);
+    try {
+      const ratingValue = rating.trim() ? Number(rating.replace(',', '.')) : undefined;
+      await apiFetch(`/trips/${tripId}/accommodation`, {
+        method: 'PUT',
+        body: {
+          title: title.trim(),
+          address: address.trim() || undefined,
+          url: url.trim() || undefined,
+          imageUrl: imageUrl.trim() || undefined,
+          note: note.trim() || undefined,
+          rating: ratingValue !== undefined && ratingValue >= 0 ? ratingValue : undefined,
+          amenities: amenities
+            .split(',')
+            .map((a) => a.trim())
+            .filter(Boolean),
+        },
+      });
+      setOpen(false);
+      onChanged();
+      toast('Unterkunft gespeichert', 'success');
+    } catch (err) {
+      setFormError(errorMessage(err));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function remove() {
+    setClearing(true);
+    try {
+      await apiFetch(`/trips/${tripId}/accommodation`, { method: 'DELETE' });
+      onChanged();
+      toast('Unterkunft entfernt', 'success');
+    } catch (err) {
+      toast(errorMessage(err), 'error');
+    } finally {
+      setClearing(false);
+    }
+  }
+
+  return (
+    <>
+      {picked ? (
+        <section className="card overflow-hidden p-0" aria-label="Ausgewählte Unterkunft">
+          {trip.accommodation_image_url && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={trip.accommodation_image_url} alt="" className="h-48 w-full object-cover" />
+          )}
+          <div className="space-y-3 p-5 sm:p-6">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="text-footnote font-medium uppercase tracking-wide text-accent">Ausgewählte Unterkunft</p>
+                <h3 className="text-headline">{trip.accommodation_title}</h3>
+                {trip.accommodation_address && <p className="text-callout text-secondary">{trip.accommodation_address}</p>}
+              </div>
+              {trip.accommodation_rating && (
+                <Badge tone="accent">
+                  <IconSparkles size={13} /> {Number(trip.accommodation_rating).toFixed(1)}
+                </Badge>
+              )}
+            </div>
+            {trip.accommodation_note && <p className="whitespace-pre-line text-callout">{trip.accommodation_note}</p>}
+            {trip.accommodation_amenities.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {trip.accommodation_amenities.map((a) => (
+                  <Badge key={a} tone="neutral">
+                    {a}
+                  </Badge>
+                ))}
+              </div>
+            )}
+            <div className="flex flex-wrap items-center gap-4 pt-1">
+              {trip.accommodation_url && (
+                <a
+                  href={trip.accommodation_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 text-subhead font-medium text-accent hover:underline"
+                >
+                  Zum Angebot <IconExternal size={14} />
+                </a>
+              )}
+              {isCreator && (
+                <>
+                  <Button variant="plain" size="sm" onClick={() => setOpen(true)}>
+                    Bearbeiten
+                  </Button>
+                  <Button variant="danger" size="sm" loading={clearing} onClick={remove}>
+                    Entfernen
+                  </Button>
+                </>
+              )}
+            </div>
+          </div>
+        </section>
+      ) : (
+        isCreator && (
+          <button
+            type="button"
+            onClick={() => setOpen(true)}
+            className="card flex w-full items-center gap-3 border-dashed p-5 text-left text-callout text-secondary transition hover:border-accent hover:text-accent"
+          >
+            <IconPlus size={20} /> Unterkunft eingetragen? Trag sie hier ein, damit alle sie sehen.
+          </button>
+        )
+      )}
+
+      <Dialog open={open} onClose={() => setOpen(false)} title="Unterkunft eintragen">
+        <form onSubmit={onSubmit} className="space-y-5 p-5 sm:p-6" noValidate>
+          {formError && <Alert tone="error">{formError}</Alert>}
+          <Input label="Name" placeholder="z. B. Exclusive Alpenlodge Galsterberg" maxLength={200} value={title} onChange={(e) => setTitle(e.target.value)} />
+          <Input label="Adresse" optional placeholder="Straße, PLZ, Ort, Land" maxLength={300} value={address} onChange={(e) => setAddress(e.target.value)} />
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Input label="Link zur Buchung" optional placeholder="https://…" maxLength={500} value={url} onChange={(e) => setUrl(e.target.value)} />
+            <Input label="Bild-URL" optional placeholder="https://…" maxLength={1000} value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} />
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Input
+              label="Bewertung"
+              optional
+              type="number"
+              inputMode="decimal"
+              min={0}
+              max={5}
+              step="0.1"
+              placeholder="z. B. 4.8"
+              value={rating}
+              onChange={(e) => setRating(e.target.value)}
+            />
+            <Input
+              label="Ausstattung"
+              optional
+              placeholder="Sauna, Kamin, Ski-in/Ski-out"
+              hint="Mit Komma getrennt"
+              maxLength={600}
+              value={amenities}
+              onChange={(e) => setAmenities(e.target.value)}
+            />
+          </div>
+          <Textarea label="Notiz" optional rows={2} maxLength={500} value={note} onChange={(e) => setNote(e.target.value)} />
+          <div className="flex justify-end gap-3">
+            <Button type="button" variant="plain" onClick={() => setOpen(false)}>
+              Abbrechen
+            </Button>
+            <Button type="submit" loading={saving} disabled={!title.trim()}>
+              Speichern
+            </Button>
+          </div>
+        </form>
+      </Dialog>
+    </>
   );
 }

@@ -12,6 +12,8 @@ import {
   releaseResults,
   hideResults,
   deleteTrip,
+  setAccommodationPick,
+  clearAccommodationPick,
 } from '../controllers/trips.controller';
 
 const router = Router();
@@ -51,5 +53,18 @@ router.post(
   asyncHandler(hideResults)
 );
 router.delete('/:tripId', requireParticipantAuth, requireTripCreatorParticipant, asyncHandler(deleteTrip));
+
+router.put(
+  '/:tripId/accommodation',
+  requireParticipantAuth,
+  requireTripCreatorParticipant,
+  asyncHandler(setAccommodationPick)
+);
+router.delete(
+  '/:tripId/accommodation',
+  requireParticipantAuth,
+  requireTripCreatorParticipant,
+  asyncHandler(clearAccommodationPick)
+);
 
 export default router;

@@ -128,6 +128,49 @@ check "Kein zweiter Versand (weiter 3 Mails)" 3 "$(mail_count)"
 check "Freigabe zurücknehmen sperrt wieder" 403 "$(jcode POST $JC $API/trips/$TID/hide-results >/dev/null; jcode GET $J1 $API/trips/$TID/results)"
 jcode POST $JC $API/trips/$TID/release-results >/dev/null
 
+echo "== Einkaufsliste =="
+check "Artikel mit Preis (Teilnehmer 1)" 201 "$(jcode POST $J1 $API/trips/$TID/groceries '{"item":"Grillfleisch","quantity":"2 kg","price":24.5}')"
+check "Artikel mit Preis (Teilnehmer 2)" 201 "$(jcode POST $J2 $API/trips/$TID/groceries '{"item":"Bier","price":11.5}')"
+check "Artikel ohne Preis (Ersteller)" 201 "$(jcode POST $JC $API/trips/$TID/groceries '{"item":"Brot"}')"
+check "Negativer Preis abgelehnt" 400 "$(jcode POST $J1 $API/trips/$TID/groceries '{"item":"X","price":-1}')"
+check "Nicht-Mitglied darf nicht sehen" 403 "$(jcode GET $J3 $API/trips/$TID/groceries)"
+check "Liste zeigt 3 Artikel" 3 "$(curl -s -b $JC $API/trips/$TID/groceries | jq '.items | length')"
+BIER=$(curl -s -b $JC $API/trips/$TID/groceries | jq -r '.items[] | select(.item=="Bier") | .id')
+check "Jedes Mitglied darf abhaken" true "$(curl -s -b $JC -X PATCH $API/trips/$TID/groceries/$BIER/toggle | jq -r '.item.checked_at != null')"
+check "  abgehakt von Ersteller vermerkt" "E2E Ersteller" "$(curl -s -b $J1 $API/trips/$TID/groceries | jq -r '.items[] | select(.id=="'$BIER'") | .checked_by_name')"
+check "Erneut antippen hebt es auf" null "$(curl -s -b $JC -X PATCH $API/trips/$TID/groceries/$BIER/toggle | jq -r '.item.checked_at')"
+check "Summe: 36 Euro gesamt" 36 "$(curl -s -b $J1 $API/trips/$TID/groceries/summary | jq -r .total)"
+check "Summe: gleichmäßig 12 Euro pro Person" 12 "$(curl -s -b $J1 $API/trips/$TID/groceries/summary | jq -r .perPersonEven)"
+check "Summe: Teilnehmer 1 zahlt eigene 24.5" 24.5 "$(curl -s -b $J1 $API/trips/$TID/groceries/summary | jq -r '.byPerson[] | select(.tripUserId=="'$(curl -s -b $J1 $API/trips/$TID | jq -r .myParticipantId)'") | .spent')"
+GRILL=$(curl -s -b $JC $API/trips/$TID/groceries | jq -r '.items[] | select(.item=="Grillfleisch") | .id')
+BROT=$(curl -s -b $JC $API/trips/$TID/groceries | jq -r '.items[] | select(.item=="Brot") | .id')
+check "Fremden Artikel löschen verboten" 403 "$(jcode DELETE $J2 $API/trips/$TID/groceries/$BROT)"
+check "Eigenen Artikel löschen erlaubt" 204 "$(jcode DELETE $J1 $API/trips/$TID/groceries/$GRILL)"
+check "Noch 2 Artikel übrig" 2 "$($PSQL -c "select count(*) from grocery_items where trip_id='$TID'")"
+
+echo "== Aktivitäten =="
+check "Aktivität mit Kategorie (Ersteller)" 201 "$(jcode POST $JC $API/trips/$TID/activities '{"title":"Schneeschuhwanderung zur Galsterberghütte","category":"nature","distanceKm":6.5,"price":0,"link":"https://www.google.com/maps/search/?api=1&query=Galsterbergh%C3%BCtte"}')"
+check "Aktivität ohne Entfernung (Teilnehmer 1)" 201 "$(jcode POST $J1 $API/trips/$TID/activities '{"title":"Sauna-Gang","category":"wellness"}')"
+check "Unbekannte Kategorie abgelehnt" 400 "$(jcode POST $J1 $API/trips/$TID/activities '{"title":"X","category":"party"}')"
+check "Link ohne https abgelehnt" 400 "$(jcode POST $J1 $API/trips/$TID/activities '{"title":"X","link":"ftp://example.com"}')"
+check "Nicht-Mitglied darf nicht sehen" 403 "$(jcode GET $J3 $API/trips/$TID/activities)"
+check "Nächstgelegene zuerst" "Schneeschuhwanderung zur Galsterberghütte" "$(curl -s -b $JC $API/trips/$TID/activities | jq -r '.activities[0].title')"
+SAUNA=$(curl -s -b $JC $API/trips/$TID/activities | jq -r '.activities[] | select(.title=="Sauna-Gang") | .id')
+check "Fremde Aktivität löschen verboten" 403 "$(jcode DELETE $J2 $API/trips/$TID/activities/$SAUNA)"
+check "Ersteller löscht fremde Aktivität" 204 "$(jcode DELETE $JC $API/trips/$TID/activities/$SAUNA)"
+check "Noch 1 Aktivität übrig" 1 "$($PSQL -c "select count(*) from trip_activities where trip_id='$TID'")"
+
+echo "== Ausgewählte Unterkunft =="
+check "Nicht-Ersteller darf nicht setzen" 403 "$(jcode PUT $J1 $API/trips/$TID/accommodation '{"title":"X"}')"
+check "Leerer Name abgelehnt" 400 "$(jcode PUT $JC $API/trips/$TID/accommodation '{"title":""}')"
+check "Link ohne https abgelehnt" 400 "$(jcode PUT $JC $API/trips/$TID/accommodation '{"title":"X","url":"ftp://x"}')"
+check "Unterkunft gespeichert" 200 "$(jcode PUT $JC $API/trips/$TID/accommodation '{"title":"Exclusive Alpenlodge Galsterberg","address":"Pruggererberg II 342, 8965 Pruggern","rating":4.9,"amenities":["Sauna","Kamin","Ski-in/Ski-out"]}')"
+check "Für Teilnehmer sichtbar, auch unveröffentlicht" "Exclusive Alpenlodge Galsterberg" "$(curl -s -b $J1 $API/trips/$TID | jq -r .trip.accommodation_title)"
+check "Ausstattung gespeichert (3 Einträge)" 3 "$(curl -s -b $J1 $API/trips/$TID | jq -r '.trip.accommodation_amenities | length')"
+check "Entfernen setzt zurück" 204 "$(jcode DELETE $JC $API/trips/$TID/accommodation)"
+check "  Name danach leer" null "$(curl -s -b $JC $API/trips/$TID | jq -r .trip.accommodation_title)"
+jcode PUT $JC $API/trips/$TID/accommodation '{"title":"Exclusive Alpenlodge Galsterberg"}' >/dev/null
+
 echo "== Abstimmung beenden =="
 check "Ersteller beendet die Abstimmung" closed "$(curl -s -b $JC -X POST $API/trips/$TID/close-voting | jq -r .trip.status)"
 check "Löschfrist startet (voting_closed_at gesetzt)" 1 "$($PSQL -c "select count(*) from trips where id='$TID' and voting_closed_at is not null")"
@@ -145,6 +188,7 @@ R2=$(docker exec $CT node dist/scripts/run-retention.js | tail -1)
 check "Beendete Reise (8 Tage) gelöscht" 1 "$(echo "$R2" | jq -r ".finishedTrips >= 1" | sed "s/true/1/")"
 check "Nie beendete Reise (95 Tage) gelöscht" 1 "$(echo "$R2" | jq -r ".staleTrips >= 1" | sed "s/true/1/")"
 check "Reise + Präferenzen + Stimmen weg" 0 "$($PSQL -c "select (select count(*) from trips where id in ('$TID','$STALE')) + (select count(*) from participant_preferences where trip_id='$TID') + (select count(*) from votes where trip_id='$TID')")"
+check "  Einkaufsliste und Aktivitäten ebenfalls weg" 0 "$($PSQL -c "select (select count(*) from grocery_items where trip_id='$TID') + (select count(*) from trip_activities where trip_id='$TID')")"
 
 echo "== Konto und Reise selbst löschen =="
 T2=$(jpost $J2 $API/trips '{"title":"Zwei","location":"X","dateOptions":[{"label":"a","startDate":"2026-11-06","endDate":"2026-11-08"}]}' | jq -r .trip.id)

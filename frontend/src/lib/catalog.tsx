@@ -1,5 +1,5 @@
 import type { ComponentType } from 'react';
-import type { AccommodationTypeKey, ExperienceKey, TripType } from '@shared/types';
+import type { AccommodationTypeKey, ActivityCategory, ExperienceKey, TripType } from '@shared/types';
 import {
   IconBed,
   IconBuilding,
@@ -47,6 +47,18 @@ export const EXPERIENCES: CatalogItem<ExperienceKey>[] = [
   { key: 'social', label: 'Feiern & Geselligkeit', description: 'Spieleabende, Après-Ski, Party', icon: IconMusic },
   { key: 'calm', label: 'Ruhe & Auszeit', description: 'Nichts müssen, einfach sein', icon: IconMoon },
 ];
+
+/** Kategorien für gesammelte Aktivitäten in der Nähe. */
+export const ACTIVITY_CATEGORIES: CatalogItem<ActivityCategory>[] = [
+  { key: 'wellness', label: 'Wellness', description: 'Sauna, Spa und Entspannung', icon: IconSparkles },
+  { key: 'nature', label: 'Natur', description: 'Wandern, Ausblick, frische Luft', icon: IconLeaf },
+  { key: 'sport', label: 'Sport', description: 'Ski, Action und Bewegung', icon: IconCompass },
+  { key: 'food', label: 'Essen', description: 'Hütten, Restaurants und Genuss', icon: IconUtensils },
+];
+
+export const ACTIVITY_CATEGORY_LABELS = Object.fromEntries(
+  ACTIVITY_CATEGORIES.map((c) => [c.key, c.label])
+) as Record<ActivityCategory, string>;
 
 export const MAX_EXPERIENCES = 4;
 export const MAX_ACCOMMODATION_TYPES = 3;

@@ -4,7 +4,9 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import useSWR from 'swr';
 import type { TripDetailResponse } from '@shared/types';
+import { ActivitiesTab } from '@/components/trip/ActivitiesTab';
 import { DatesTab } from '@/components/trip/DatesTab';
+import { GroceryTab } from '@/components/trip/GroceryTab';
 import { IdeasTab } from '@/components/trip/IdeasTab';
 import { NotesTab } from '@/components/trip/NotesTab';
 import { OverviewTab } from '@/components/trip/OverviewTab';
@@ -16,19 +18,21 @@ import {
   IconBed,
   IconCalendar,
   IconChevronLeft,
+  IconCompass,
   IconMapPin,
   IconMountain,
   IconNote,
   IconSparkles,
   IconTrophy,
   IconUsers,
+  IconUtensils,
 } from '@/components/ui/Icons';
 import { Tabs, type TabItem } from '@/components/ui/Segmented';
 import { ApiError, errorMessage } from '@/lib/api';
 import { useRequireAuth } from '@/lib/auth';
 import { TRIP_STATUS_LABELS } from '@/lib/format';
 
-type TabId = 'overview' | 'dates' | 'prefs' | 'notes' | 'results' | 'stays' | 'ideas';
+type TabId = 'overview' | 'dates' | 'prefs' | 'notes' | 'results' | 'stays' | 'food' | 'activities' | 'ideas';
 
 const TABS: TabItem<TabId>[] = [
   { value: 'overview', label: 'Übersicht', icon: <IconUsers size={17} /> },
@@ -37,6 +41,8 @@ const TABS: TabItem<TabId>[] = [
   { value: 'notes', label: 'Notizen', icon: <IconNote size={17} /> },
   { value: 'results', label: 'Ergebnis', icon: <IconTrophy size={17} /> },
   { value: 'stays', label: 'Unterkünfte', icon: <IconBed size={17} /> },
+  { value: 'food', label: 'Essen', icon: <IconUtensils size={17} /> },
+  { value: 'activities', label: 'Aktivitäten', icon: <IconCompass size={17} /> },
   { value: 'ideas', label: 'Ideen', icon: <IconMountain size={17} /> },
 ];
 
@@ -137,7 +143,17 @@ export default function TripPage({ params }: { params: { tripId: string } }) {
             onReleaseChanged={() => mutate()}
           />
         )}
-        {tab === 'stays' && <StaysTab tripId={trip.id} isCreator={isCreator} canSeeResults={canSeeResults} />}
+        {tab === 'stays' && (
+          <StaysTab
+            tripId={trip.id}
+            trip={trip}
+            isCreator={isCreator}
+            canSeeResults={canSeeResults}
+            onTripChanged={() => mutate()}
+          />
+        )}
+        {tab === 'food' && <GroceryTab tripId={trip.id} myParticipantId={myParticipantId} />}
+        {tab === 'activities' && <ActivitiesTab tripId={trip.id} myParticipantId={myParticipantId} />}
         {tab === 'ideas' && <IdeasTab tripId={trip.id} canSeeResults={canSeeResults} />}
       </div>
     </div>

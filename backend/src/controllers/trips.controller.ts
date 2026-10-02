@@ -247,6 +247,80 @@ export async function deleteTrip(req: Request, res: Response) {
   res.status(204).send();
 }
 
+const accommodationPickSchema = z.object({
+  title: z.string().trim().min(1, 'Bitte gib einen Namen ein').max(200),
+  address: z.string().trim().max(300).optional(),
+  url: z
+    .string()
+    .trim()
+    .max(500)
+    .optional()
+    .refine((v) => !v || /^https?:\/\//i.test(v), 'Der Link muss mit https:// beginnen'),
+  imageUrl: z
+    .string()
+    .trim()
+    .max(1000)
+    .optional()
+    .refine((v) => !v || /^https?:\/\//i.test(v), 'Das Bild muss eine https://-Adresse sein'),
+  note: z.string().trim().max(500).optional(),
+  rating: z.number().min(0).max(5).optional(),
+  amenities: z.array(z.string().trim().min(1).max(60)).max(20).optional(),
+});
+
+/** PUT /api/trips/:tripId/accommodation — trägt die fest ausgewählte Unterkunft ein (nur Ersteller). */
+export async function setAccommodationPick(req: Request, res: Response) {
+  const { tripId } = req.params;
+  if (req.participant!.tripId !== tripId) throw forbidden();
+
+  const parsed = accommodationPickSchema.safeParse(req.body);
+  if (!parsed.success) throw badRequest(parsed.error.issues[0].message);
+  const { title, address, url, imageUrl, note, rating, amenities } = parsed.data;
+
+  const result = await query<Trip>(
+    `UPDATE trips SET
+       accommodation_title = $2,
+       accommodation_address = $3,
+       accommodation_url = $4,
+       accommodation_image_url = $5,
+       accommodation_note = $6,
+       accommodation_rating = $7,
+       accommodation_amenities = $8,
+       accommodation_picked_by = $9,
+       accommodation_picked_at = now()
+     WHERE id = $1 RETURNING *`,
+    [
+      tripId,
+      title,
+      address || null,
+      url || null,
+      imageUrl || null,
+      note || null,
+      rating ?? null,
+      amenities ?? [],
+      req.participant!.id,
+    ]
+  );
+  if (!result.rows[0]) throw notFound('Trip nicht gefunden');
+  res.json({ trip: result.rows[0] });
+}
+
+/** DELETE /api/trips/:tripId/accommodation — entfernt die ausgewählte Unterkunft wieder (nur Ersteller). */
+export async function clearAccommodationPick(req: Request, res: Response) {
+  const { tripId } = req.params;
+  if (req.participant!.tripId !== tripId) throw forbidden();
+
+  const result = await query<Trip>(
+    `UPDATE trips SET
+       accommodation_title = NULL, accommodation_address = NULL, accommodation_url = NULL,
+       accommodation_image_url = NULL, accommodation_note = NULL, accommodation_rating = NULL,
+       accommodation_amenities = '{}', accommodation_picked_by = NULL, accommodation_picked_at = NULL
+     WHERE id = $1 RETURNING *`,
+    [tripId]
+  );
+  if (!result.rows[0]) throw notFound('Trip nicht gefunden');
+  res.json({ trip: result.rows[0] });
+}
+
 /** POST /api/trips/:tripId/reopen-voting — nur der Ersteller darf das Voting wieder öffnen. */
 export async function reopenVoting(req: Request, res: Response) {
   const { tripId } = req.params;

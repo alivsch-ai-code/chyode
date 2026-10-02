@@ -332,3 +332,84 @@ Budget, Bewertung, Entfernung und Gruppenwünschen und cached sie. Nur Ersteller
 
 ### `GET /trips/:tripId/accommodations`
 Liefert die zuletzt gecachten Vorschläge (`search_results_cache`), ebenfalls mit `demo`-Flag.
+
+### `PUT /trips/:tripId/accommodation` · `DELETE /trips/:tripId/accommodation`
+Trägt eine fest ausgewählte Unterkunft ein bzw. entfernt sie wieder (nur Ersteller) – unabhängig
+von der Suche oben, z. B. wenn schon manuell gebucht wurde. Erscheint für alle Mitglieder oben im
+Tab „Unterkünfte“, auch bevor das Ergebnis freigegeben ist.
+
+```json
+{
+  "title": "Exclusive Alpenlodge Ski in/Ski out Galsterberg",
+  "address": "Pruggererberg II 342, 8965 Pruggern, Österreich",
+  "url": "https://www.airbnb.de/rooms/…",
+  "imageUrl": "https://…",
+  "note": "Check-in Freitag ab 16 Uhr, Check-out Sonntag bis 10 Uhr.",
+  "rating": 4.9,
+  "amenities": ["Sauna", "Kamin", "Ski-in/Ski-out"]
+}
+```
+Alle Felder außer `title` sind optional. `url`/`imageUrl` müssen, wenn gesetzt, mit `https://`
+beginnen.
+
+---
+
+## Einkaufsliste
+
+Ein gemeinsamer Einkaufszettel: wer etwas einträgt, legt zugleich seinen Wunsch dafür fest. Mit
+Preis lässt sich die Summe am Ende aufteilen.
+
+### `POST /trips/:tripId/groceries`
+```json
+{ "item": "Grillfleisch", "quantity": "2 kg", "price": 24.5 }
+```
+`quantity` und `price` sind optional.
+
+### `GET /trips/:tripId/groceries`
+Alle Einträge, offene zuerst, inkl. `added_by_name` und – falls abgehakt – `checked_by_name`.
+
+### `GET /trips/:tripId/groceries/summary`
+Wird live berechnet (nichts wird gespeichert), damit die Summe nie veraltet:
+```json
+{
+  "total": 142.5,
+  "participantCount": 6,
+  "perPersonEven": 23.75,
+  "byPerson": [{ "tripUserId": "…", "name": "Mara", "spent": 24.5 }]
+}
+```
+`perPersonEven` ist die gleichmäßige Aufteilung; `byPerson` erlaubt die Alternative „jede Person
+zahlt, was sie selbst eingetragen hat“.
+
+### `PATCH /trips/:tripId/groceries/:itemId/toggle`
+Hakt einen Artikel ab bzw. macht das rückgängig (jedes Mitglied).
+
+### `DELETE /trips/:tripId/groceries/:itemId`
+Ersteller entfernt jeden Eintrag, alle anderen nur ihre eigenen.
+
+---
+
+## Aktivitäten
+
+Eine gemeinsam gepflegte Liste von Unternehmungen in der Nähe – manuell von der Gruppe
+eingetragen, ohne Anbindung an Google Places o. Ä.
+
+### `POST /trips/:tripId/activities`
+```json
+{
+  "title": "Schneeschuhwanderung zur Galsterberghütte",
+  "category": "nature",
+  "distanceKm": 6.5,
+  "price": 0,
+  "description": "Ca. 2,5 Std., leicht, Start direkt am Chalet.",
+  "link": "https://www.google.com/maps/search/?api=1&query=Galsterberghütte"
+}
+```
+`category` ist eine von `wellness`, `nature`, `sport`, `food`; alle Felder außer `title` sind
+optional.
+
+### `GET /trips/:tripId/activities`
+Alle Aktivitäten, nächstgelegene zuerst, inkl. `added_by_name`.
+
+### `DELETE /trips/:tripId/activities/:activityId`
+Ersteller entfernt jede Aktivität, alle anderen nur ihre eigenen.

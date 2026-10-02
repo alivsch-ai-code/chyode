@@ -194,7 +194,7 @@ JC_PID=$(curl -s -b $JC $API/trips/$TID | jq -r .myParticipantId)
 J1_PID=$(curl -s -b $J1 $API/trips/$TID | jq -r .myParticipantId)
 J2_PID=$(curl -s -b $J2 $API/trips/$TID | jq -r .myParticipantId)
 check "Nicht-Mitglied sieht Kasse nicht" 403 "$(jcode GET $J3 $API/trips/$TID/balances)"
-check "Unterkunft mit Preis gespeichert" 300 "$(curl -s -b $JC -X PUT -H 'Content-Type: application/json' -d "{\"title\":\"Exclusive Alpenlodge Galsterberg\",\"totalPrice\":300,\"paidBy\":\"$JC_PID\"}" $API/trips/$TID/accommodation | jq -r .trip.accommodation_total_price)"
+check "Unterkunft mit Preis gespeichert" 300.00 "$(curl -s -b $JC -X PUT -H 'Content-Type: application/json' -d "{\"title\":\"Exclusive Alpenlodge Galsterberg\",\"totalPrice\":300,\"paidBy\":\"$JC_PID\"}" $API/trips/$TID/accommodation | jq -r .trip.accommodation_total_price)"
 check "Unterkunft fließt in die Kasse ein (3-Wege-Split)" 200 "$(curl -s -b $J1 $API/trips/$TID/balances | jq -r '.balances[] | select(.tripUserId=="'$JC_PID'") | .balance')"
 echo 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=' | base64 -d > /tmp/receipt.png
 EXP=$(curl -s -b $J1 -F 'description=Taxi' -F 'amount=90' -F 'receipt=@/tmp/receipt.png;type=image/png' $API/trips/$TID/expenses)

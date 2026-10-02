@@ -34,7 +34,9 @@ abstimmen, Wünsche notieren, Ideen für die Berge entdecken und passende Unterk
    Unterkunftswünsche) sieht der Ersteller sofort, Teilnehmer erst, wenn er sie **freigibt**.
    Sobald das Ergebnis freigegeben ist und alle abgestimmt haben, bekommen alle eine E-Mail.
 6. Der Ersteller startet die **Unterkunftssuche** oder trägt die bereits gebuchte Unterkunft fest
-   ein (Name, Adresse, Bewertung, Ausstattung, Link) – sichtbar für alle, auch vor der Freigabe.
+   ein (Name, Adresse, Bewertung, Ausstattung, Link, Gesamtpreis) – sichtbar für alle, auch vor
+   der Freigabe. Jedes Mitglied kann außerdem eine **eigene Unterkunft vorschlagen** (manuell,
+   ganz ohne Booking.com/Airbnb); der Ersteller übernimmt einen Vorschlag mit einem Klick.
 7. Vor Ort helfen mehrere Tabs: eine gemeinsame **Einkaufsliste** (gruppiert nach Mahlzeit, mit
    Wunschliste – „ich kaufe das“), gesammelte **Aktivitäten** in der Nähe (Kategorie, Entfernung,
    Dauer, Preis, Link) und eine **Kasse**: abgehakte Einkäufe, Unterkunftskosten und manuelle
@@ -148,6 +150,20 @@ darauf hin). Für echte Ergebnisse in der `.env` setzen:
 
 - `RAPIDAPI_KEY` — für Booking.com- und Airbnb-Suche über RapidAPI
 - `GOOGLE_MAPS_API_KEY` — für Distanzberechnung (Distance Matrix API)
+
+## App installieren (PWA)
+
+Die Seite lässt sich auf dem Startbildschirm installieren: auf Android/Chrome erscheint dafür
+automatisch ein Hinweis mit „App installieren“, auf iPhone/iPad eine Anleitung zum manuellen
+Hinzufügen über das Teilen-Menü (iOS unterstützt keinen automatischen Install-Dialog). Grundlage
+sind `frontend/src/app/manifest.ts` und die Icons in `frontend/public/icons/`. Ändert sich das
+Logo, lassen sich die Icons neu erzeugen mit:
+
+```bash
+cd frontend
+npm install --no-save sharp   # nur fürs Skript, keine Laufzeit-Abhängigkeit
+node scripts/generate-icons.js
+```
 
 ## Rechtliches
 

@@ -106,6 +106,20 @@ export interface TripUser {
   joined_at: string;
 }
 
+export interface TripStaySuggestion {
+  id: string;
+  trip_id: string;
+  trip_user_id: string;
+  title: string;
+  address: string | null;
+  url: string | null;
+  image_url: string | null;
+  note: string | null;
+  price: string | null;
+  created_at: string;
+  added_by_name?: string;
+}
+
 export interface TripExpense {
   id: string;
   trip_id: string;

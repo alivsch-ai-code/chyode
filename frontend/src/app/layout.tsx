@@ -5,6 +5,7 @@ import { Providers } from '@/components/Providers';
 import { Navbar } from '@/components/Navbar';
 import { Footer } from '@/components/Footer';
 import { CookieNotice } from '@/components/CookieNotice';
+import { InstallBanner } from '@/components/InstallBanner';
 
 export const metadata: Metadata = {
   title: { default: 'Reiseplaner', template: '%s · Reiseplaner' },
@@ -12,6 +13,15 @@ export const metadata: Metadata = {
   applicationName: 'Reiseplaner',
   // geschlossene Nutzergruppe: nicht in Suchmaschinen aufnehmen
   robots: { index: false, follow: false },
+  icons: {
+    icon: [{ url: '/icon.svg', type: 'image/svg+xml' }, { url: '/icons/favicon-32.png', sizes: '32x32' }],
+    apple: [{ url: '/icons/apple-touch-icon.png', sizes: '180x180' }],
+  },
+  appleWebApp: {
+    capable: true,
+    title: 'Reiseplaner',
+    statusBarStyle: 'default',
+  },
 };
 
 export const viewport: Viewport = {
@@ -34,6 +44,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           </main>
           <Footer />
           <CookieNotice />
+          <InstallBanner />
         </Providers>
       </body>
     </html>

@@ -361,6 +361,24 @@ Alle Felder außer `title` sind optional. `url`/`imageUrl` müssen, wenn gesetzt
 beginnen. Mit `totalPrice` (+ optional `paidBy`, Standard: wer den Eintrag speichert) fließt die
 Unterkunft automatisch als Posten in die Kasse ein (siehe unten).
 
+### `POST /trips/:tripId/stay-suggestions`
+Jedes Mitglied kann eine eigene Unterkunft vorschlagen – manuell, ganz ohne Booking.com/Airbnb
+(z. B. ein selbst gefundener Link oder Kontakt):
+```json
+{ "title": "Ferienhaus am See", "address": "…", "url": "https://…", "price": 650, "note": "…" }
+```
+Alle Felder außer `title` sind optional.
+
+### `GET /trips/:tripId/stay-suggestions`
+Alle Vorschläge, neueste zuerst, inkl. `added_by_name`.
+
+### `DELETE /trips/:tripId/stay-suggestions/:id`
+Ersteller entfernt jeden Vorschlag, alle anderen nur ihre eigenen.
+
+### `POST /trips/:tripId/stay-suggestions/:id/select`
+Übernimmt einen Vorschlag als die fest ausgewählte Unterkunft (nur Ersteller; identisch zu einem
+`PUT /accommodation` mit den Daten des Vorschlags). Der Vorschlag bleibt zusätzlich erhalten.
+
 ---
 
 ## Einkaufsliste

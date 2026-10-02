@@ -292,6 +292,24 @@ CREATE TABLE IF NOT EXISTS trip_settlements (
 CREATE INDEX IF NOT EXISTS idx_trip_settlements_trip_id ON trip_settlements(trip_id);
 
 -- ------------------------------------------------------------
+-- trip_stay_suggestions: Unterkunfts-Vorschläge durch die Gruppe (manuell, ohne Booking/Airbnb)
+-- ------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS trip_stay_suggestions (
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  trip_id       UUID NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
+  trip_user_id  UUID NOT NULL REFERENCES trip_users(id) ON DELETE CASCADE,
+  title         TEXT NOT NULL,
+  address       TEXT,
+  url           TEXT,
+  image_url     TEXT,
+  note          TEXT,
+  price         NUMERIC(10, 2) CHECK (price >= 0),
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_trip_stay_suggestions_trip_id ON trip_stay_suggestions(trip_id);
+
+-- ------------------------------------------------------------
 -- search_results_cache: gecachte Ergebnisse externer Booking-APIs
 -- ------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS search_results_cache (

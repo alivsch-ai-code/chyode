@@ -374,66 +374,72 @@ function GroceryRow({
 }) {
   const checked = Boolean(entry.checked_at);
   return (
-    <li className={`card flex items-center gap-3.5 p-4 ${checked ? 'opacity-60' : ''}`}>
+    <li className={`card flex items-start gap-3.5 p-4 ${checked ? 'opacity-60' : ''}`}>
       <button
         type="button"
         onClick={onToggle}
         disabled={busy}
         aria-pressed={checked}
         aria-label={checked ? `${entry.item} wieder als offen markieren` : `${entry.item} als gekauft abhaken`}
-        className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 transition disabled:opacity-40 ${
+        className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 transition disabled:opacity-40 ${
           checked ? 'border-accent bg-accent text-white' : 'border-line hover:border-accent'
         }`}
       >
         {checked && <IconCheck size={15} strokeWidth={3} />}
       </button>
       <div className="min-w-0 flex-1">
-        <p className={`text-callout font-medium ${checked ? 'line-through' : ''}`}>
-          {entry.item}
-          {entry.quantity && <span className="font-normal text-secondary"> · {entry.quantity}</span>}
-        </p>
+        <div className="flex items-start justify-between gap-2">
+          <p className={`min-w-0 break-words text-callout font-medium ${checked ? 'line-through' : ''}`}>
+            {entry.item}
+            {entry.quantity && <span className="font-normal text-secondary"> · {entry.quantity}</span>}
+          </p>
+          <div className="flex shrink-0 items-center gap-1.5">
+            {entry.price !== null && <Badge tone="neutral">{formatMoney(Number(entry.price))}</Badge>}
+            {mine && (
+              <button
+                type="button"
+                onClick={onDelete}
+                disabled={busy}
+                aria-label="Eintrag löschen"
+                className="h-8 w-8 shrink-0 rounded-full text-secondary transition hover:bg-danger/10 hover:text-danger disabled:opacity-40"
+              >
+                <IconTrash size={16} className="mx-auto" />
+              </button>
+            )}
+          </div>
+        </div>
         {entry.note && <p className="mt-0.5 text-footnote italic text-secondary">{entry.note}</p>}
-        <p className="mt-0.5 text-footnote text-secondary">
-          von {entry.added_by_name}
-          {checked && entry.checked_by_name && <span> · besorgt von {entry.checked_by_name}</span>}
-        </p>
+        <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1.5">
+          <p className="text-footnote text-secondary">
+            von {entry.added_by_name}
+            {checked && entry.checked_by_name && <span> · besorgt von {entry.checked_by_name}</span>}
+          </p>
+          {!checked &&
+            (entry.claimed_by ? (
+              <button
+                type="button"
+                onClick={entry.claimed_by === myParticipantId ? onClaim : undefined}
+                disabled={busy || entry.claimed_by !== myParticipantId}
+                className={`rounded-full px-3 py-1 text-footnote font-medium transition ${
+                  entry.claimed_by === myParticipantId
+                    ? 'bg-accent/15 text-accent hover:bg-accent/25'
+                    : 'bg-fill/12 text-secondary'
+                }`}
+              >
+                {entry.claimed_by === myParticipantId ? 'Du kaufst das' : `${entry.claimed_by_name} kauft das`}
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={onClaim}
+                disabled={busy}
+                className="rounded-full bg-fill/12 px-3 py-1 text-footnote font-medium text-label transition hover:bg-fill/20 disabled:opacity-40"
+              >
+                Ich kaufe das
+              </button>
+            ))}
+        </div>
       </div>
-      {!checked &&
-        (entry.claimed_by ? (
-          <button
-            type="button"
-            onClick={entry.claimed_by === myParticipantId ? onClaim : undefined}
-            disabled={busy || entry.claimed_by !== myParticipantId}
-            className={`shrink-0 rounded-full px-3 py-1 text-footnote font-medium transition ${
-              entry.claimed_by === myParticipantId
-                ? 'bg-accent/15 text-accent hover:bg-accent/25'
-                : 'bg-fill/12 text-secondary'
-            }`}
-          >
-            {entry.claimed_by === myParticipantId ? 'Du kaufst das' : `${entry.claimed_by_name} kauft das`}
-          </button>
-        ) : (
-          <button
-            type="button"
-            onClick={onClaim}
-            disabled={busy}
-            className="shrink-0 rounded-full bg-fill/12 px-3 py-1 text-footnote font-medium text-label transition hover:bg-fill/20 disabled:opacity-40"
-          >
-            Ich kaufe das
-          </button>
-        ))}
-      {entry.price !== null && <Badge tone="neutral">{formatMoney(Number(entry.price))}</Badge>}
-      {mine && (
-        <button
-          type="button"
-          onClick={onDelete}
-          disabled={busy}
-          aria-label="Eintrag löschen"
-          className="h-9 w-9 shrink-0 rounded-full text-secondary transition hover:bg-danger/10 hover:text-danger disabled:opacity-40"
-        >
-          <IconTrash size={18} className="mx-auto" />
-        </button>
-      )}
     </li>
   );
 }

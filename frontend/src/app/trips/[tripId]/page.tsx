@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import useSWR from 'swr';
 import type { TripDetailResponse } from '@shared/types';
 import { ActivitiesTab } from '@/components/trip/ActivitiesTab';
@@ -29,39 +29,76 @@ import {
   IconUsers,
   IconUtensils,
 } from '@/components/ui/Icons';
-import { Tabs, type TabItem } from '@/components/ui/Segmented';
+import { Segmented, Tabs, type TabItem } from '@/components/ui/Segmented';
 import { ApiError, errorMessage } from '@/lib/api';
 import { useRequireAuth } from '@/lib/auth';
 import { TRIP_STATUS_LABELS } from '@/lib/format';
 
 type TabId = 'overview' | 'dates' | 'prefs' | 'notes' | 'results' | 'stays' | 'food' | 'activities' | 'ledger' | 'ideas';
+type GroupId = 'overview' | 'voting' | 'planning' | 'ledger' | 'more';
 
-const VOTING_TABS: TabItem<TabId>[] = [
-  { value: 'overview', label: 'Übersicht', icon: <IconUsers size={17} /> },
-  { value: 'dates', label: 'Termine', icon: <IconCalendar size={17} /> },
-  { value: 'prefs', label: 'Präferenzen', icon: <IconSparkles size={17} /> },
-  { value: 'notes', label: 'Notizen', icon: <IconNote size={17} /> },
-  { value: 'results', label: 'Ergebnis', icon: <IconTrophy size={17} /> },
-  { value: 'stays', label: 'Unterkünfte', icon: <IconBed size={17} /> },
-  { value: 'food', label: 'Essen', icon: <IconUtensils size={17} /> },
-  { value: 'activities', label: 'Aktivitäten', icon: <IconCompass size={17} /> },
-  { value: 'ledger', label: 'Kasse', icon: <IconReceipt size={17} /> },
-  { value: 'ideas', label: 'Ideen', icon: <IconMountain size={17} /> },
+// Jede Gruppe ist ein Reiter oben; hat sie mehr als einen Unterpunkt, erscheint darunter eine
+// kompakte zweite Auswahl. So bleibt die obere Leiste immer kurz und ruhig, egal wie viel die
+// Reise schon enthält.
+interface TabGroup {
+  value: GroupId;
+  label: string;
+  icon: ReactNode;
+  leaves: TabItem<TabId>[];
+}
+
+function groupsForMode(mode: 'voting' | 'planning'): TabGroup[] {
+  const groups: TabGroup[] = [
+    {
+      value: 'overview',
+      label: 'Übersicht',
+      icon: <IconUsers size={17} />,
+      leaves: [{ value: 'overview', label: 'Übersicht', icon: <IconUsers size={17} /> }],
+    },
+  ];
+  if (mode === 'voting') {
+    groups.push({
+      value: 'voting',
+      label: 'Abstimmung',
+      icon: <IconCalendar size={17} />,
+      leaves: [
+        { value: 'dates', label: 'Termine', icon: <IconCalendar size={16} /> },
+        { value: 'prefs', label: 'Präferenzen', icon: <IconSparkles size={16} /> },
+        { value: 'results', label: 'Ergebnis', icon: <IconTrophy size={16} /> },
+      ],
+    });
+  }
+  groups.push({
+    value: 'planning',
+    label: 'Planung',
+    icon: <IconBed size={17} />,
+    leaves: [
+      { value: 'stays', label: 'Unterkünfte', icon: <IconBed size={16} /> },
+      { value: 'food', label: 'Essen', icon: <IconUtensils size={16} /> },
+      { value: 'activities', label: 'Aktivitäten', icon: <IconCompass size={16} /> },
+    ],
+  });
+  groups.push({
+    value: 'ledger',
+    label: 'Kasse',
+    icon: <IconReceipt size={17} />,
+    leaves: [{ value: 'ledger', label: 'Kasse', icon: <IconReceipt size={17} /> }],
+  });
+  groups.push({
+    value: 'more',
+    label: 'Mehr',
+    icon: <IconNote size={17} />,
+    leaves: [
+      { value: 'notes', label: 'Notizen', icon: <IconNote size={16} /> },
+      { value: 'ideas', label: 'Ideen', icon: <IconMountain size={16} /> },
+    ],
+  });
+  return groups;
+}
+
+const ALL_TAB_IDS = [
+  ...new Set([...groupsForMode('voting'), ...groupsForMode('planning')].flatMap((g) => g.leaves.map((l) => l.value))),
 ];
-
-// Im Planungsmodus (schon gebucht) treten Termine/Präferenzen/Ergebnis in den Hintergrund;
-// Unterkunft, Essen, Aktivitäten und Kasse stehen vorne.
-const PLANNING_TABS: TabItem<TabId>[] = [
-  { value: 'overview', label: 'Übersicht', icon: <IconUsers size={17} /> },
-  { value: 'stays', label: 'Unterkünfte', icon: <IconBed size={17} /> },
-  { value: 'food', label: 'Essen', icon: <IconUtensils size={17} /> },
-  { value: 'activities', label: 'Aktivitäten', icon: <IconCompass size={17} /> },
-  { value: 'ledger', label: 'Kasse', icon: <IconReceipt size={17} /> },
-  { value: 'notes', label: 'Notizen', icon: <IconNote size={17} /> },
-  { value: 'ideas', label: 'Ideen', icon: <IconMountain size={17} /> },
-];
-
-const ALL_TAB_IDS = [...new Set([...VOTING_TABS, ...PLANNING_TABS].map((t) => t.value))];
 const isTabId = (value: string | null): value is TabId => ALL_TAB_IDS.includes(value as TabId);
 
 export default function TripPage({ params }: { params: { tripId: string } }) {
@@ -73,7 +110,8 @@ export default function TripPage({ params }: { params: { tripId: string } }) {
   });
   const [tab, setTab] = useState<TabId>('overview');
   const [isNew, setIsNew] = useState(false);
-  const tabs = data?.trip.mode === 'planning' ? PLANNING_TABS : VOTING_TABS;
+  const groups = groupsForMode(data?.trip.mode === 'planning' ? 'planning' : 'voting');
+  const activeGroup = groups.find((g) => g.leaves.some((l) => l.value === tab)) ?? groups[0];
 
   // Tab und "neu erstellt"-Hinweis aus der URL übernehmen
   useEffect(() => {
@@ -92,9 +130,14 @@ export default function TripPage({ params }: { params: { tripId: string } }) {
     setIsNew(false);
   };
 
+  const changeGroup = (next: GroupId) => {
+    const group = groups.find((g) => g.value === next);
+    if (group) changeTab(group.leaves[0].value);
+  };
+
   // Ist der aktuelle Tab im jetzigen Modus gar nicht verfügbar (z. B. nach einem Moduswechsel), zurück zur Übersicht
   useEffect(() => {
-    if (data && !tabs.some((t) => t.value === tab)) changeTab('overview');
+    if (data && !groups.some((g) => g.leaves.some((l) => l.value === tab))) changeTab('overview');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data?.trip.mode]);
 
@@ -143,7 +186,20 @@ export default function TripPage({ params }: { params: { tripId: string } }) {
             </p>
           </div>
         </header>
-        <Tabs tabs={tabs} value={tab} onChange={changeTab} idPrefix="trip" />
+        <Tabs
+          tabs={groups.map((g) => ({ value: g.value, label: g.label, icon: g.icon }))}
+          value={activeGroup.value}
+          onChange={changeGroup}
+          idPrefix="trip"
+        />
+        {activeGroup.leaves.length > 1 && (
+          <Segmented
+            ariaLabel={activeGroup.label}
+            value={tab}
+            onChange={changeTab}
+            options={activeGroup.leaves.map((l) => ({ value: l.value, label: l.label }))}
+          />
+        )}
       </div>
 
       <div id={`trip-panel-${tab}`} role="tabpanel" aria-labelledby={`trip-tab-${tab}`} tabIndex={0} className="outline-none">
@@ -176,6 +232,7 @@ export default function TripPage({ params }: { params: { tripId: string } }) {
             isCreator={isCreator}
             canSeeResults={canSeeResults}
             participants={participants}
+            myParticipantId={myParticipantId}
             onTripChanged={() => mutate()}
           />
         )}

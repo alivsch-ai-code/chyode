@@ -182,6 +182,21 @@ check "Entfernen setzt zurück" 204 "$(jcode DELETE $JC $API/trips/$TID/accommod
 check "  Name danach leer" null "$(curl -s -b $JC $API/trips/$TID | jq -r .trip.accommodation_title)"
 jcode PUT $JC $API/trips/$TID/accommodation '{"title":"Exclusive Alpenlodge Galsterberg"}' >/dev/null
 
+echo "== Unterkunfts-Vorschläge aus der Gruppe (ohne Booking/Airbnb) =="
+check "Teilnehmer schlägt eigene Unterkunft vor" 201 "$(jcode POST $J1 $API/trips/$TID/stay-suggestions '{"title":"Ferienhaus am See","price":650}')"
+check "Leerer Name abgelehnt" 400 "$(jcode POST $J1 $API/trips/$TID/stay-suggestions '{"title":""}')"
+check "Link ohne https abgelehnt" 400 "$(jcode POST $J1 $API/trips/$TID/stay-suggestions '{"title":"X","url":"ftp://x"}')"
+check "Nicht-Mitglied darf nicht sehen" 403 "$(jcode GET $J3 $API/trips/$TID/stay-suggestions)"
+SUG=$(curl -s -b $JC $API/trips/$TID/stay-suggestions | jq -r '.suggestions[0].id')
+check "Vorschlag zeigt Namen des Vorschlagenden" "E2E Eins" "$(curl -s -b $JC $API/trips/$TID/stay-suggestions | jq -r '.suggestions[0].added_by_name')"
+check "Nicht-Ersteller darf fremden Vorschlag nicht übernehmen" 403 "$(jcode POST $J2 $API/trips/$TID/stay-suggestions/$SUG/select)"
+check "Ersteller übernimmt Vorschlag als Unterkunft" "Ferienhaus am See" "$(curl -s -b $JC -X POST $API/trips/$TID/stay-suggestions/$SUG/select | jq -r .trip.accommodation_title)"
+check "Preis wurde mit übernommen" 650.00 "$(curl -s -b $JC $API/trips/$TID | jq -r .trip.accommodation_total_price)"
+check "Vorschlag bleibt zusätzlich erhalten" 1 "$($PSQL -c "select count(*) from trip_stay_suggestions where id='$SUG'")"
+check "Fremden Vorschlag löschen verboten" 403 "$(jcode DELETE $J2 $API/trips/$TID/stay-suggestions/$SUG)"
+check "Eigenen Vorschlag löschen erlaubt" 204 "$(jcode DELETE $J1 $API/trips/$TID/stay-suggestions/$SUG)"
+jcode PUT $JC $API/trips/$TID/accommodation '{"title":"Exclusive Alpenlodge Galsterberg"}' >/dev/null
+
 echo "== Wunschliste (Einkaufsliste beanspruchen) =="
 BROT=$(curl -s -b $JC $API/trips/$TID/groceries | jq -r '.items[] | select(.item=="Brot") | .id')
 check "Teilnehmer 1 beansprucht Artikel" true "$(curl -s -b $J1 -X PATCH $API/trips/$TID/groceries/$BROT/claim | jq -r '.item.claimed_at != null')"

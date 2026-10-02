@@ -2,7 +2,7 @@
 
 import { useEffect, useState, type FormEvent } from 'react';
 import useSWR from 'swr';
-import type { AccommodationSuggestion, Trip, TripParticipant } from '@shared/types';
+import type { AccommodationSuggestion, Trip, TripParticipant, TripStaySuggestion } from '@shared/types';
 import { AccommodationCard } from '@/components/AccommodationCard';
 import { Button } from '@/components/ui/Button';
 import { Dialog } from '@/components/ui/Dialog';
@@ -15,6 +15,7 @@ import {
   IconFlower,
   IconHome,
   IconPlus,
+  IconReceipt,
   IconRefresh,
   IconSnowflake,
   IconSparkles,
@@ -56,6 +57,7 @@ export function StaysTab({
   canSeeResults,
   trip,
   participants,
+  myParticipantId,
   onTripChanged,
 }: {
   tripId: string;
@@ -63,6 +65,7 @@ export function StaysTab({
   canSeeResults: boolean;
   trip: Trip;
   participants: TripParticipant[];
+  myParticipantId: string;
   onTripChanged: () => void;
 }) {
   const { toast } = useToast();
@@ -113,6 +116,13 @@ export function StaysTab({
         isCreator={isCreator}
         participants={participants}
         onChanged={onTripChanged}
+      />
+
+      <StaySuggestions
+        tripId={tripId}
+        isCreator={isCreator}
+        myParticipantId={myParticipantId}
+        onSelected={onTripChanged}
       />
 
       {!canSeeResults ? (
@@ -339,12 +349,22 @@ function AccommodationPick({
                 })}
               </div>
             )}
-            {trip.accommodation_total_price && (
+            {trip.accommodation_total_price ? (
               <p className="text-callout text-secondary">
                 Gesamtpreis <span className="font-semibold text-label">{formatMoney(Number(trip.accommodation_total_price))}</span>
                 {' · bezahlt von '}
                 {participants.find((p) => p.id === trip.accommodation_paid_by)?.name ?? '–'}
               </p>
+            ) : (
+              isCreator && (
+                <button
+                  type="button"
+                  onClick={() => setOpen(true)}
+                  className="flex items-center gap-1.5 text-callout font-medium text-accent hover:underline"
+                >
+                  <IconReceipt size={15} /> Preis eintragen, damit er in die Kasse einfließt
+                </button>
+              )
             )}
             <div className="flex flex-wrap items-center gap-4 pt-1">
               {trip.accommodation_url && (
@@ -387,6 +407,34 @@ function AccommodationPick({
           {formError && <Alert tone="error">{formError}</Alert>}
           <Input label="Name" placeholder="z. B. Exclusive Alpenlodge Galsterberg" maxLength={200} value={title} onChange={(e) => setTitle(e.target.value)} />
           <Input label="Adresse" optional placeholder="Straße, PLZ, Ort, Land" maxLength={300} value={address} onChange={(e) => setAddress(e.target.value)} />
+
+          <div className="space-y-4 rounded-control bg-accent/10 p-4">
+            <p className="flex items-center gap-1.5 text-subhead font-semibold text-accent">
+              <IconReceipt size={16} /> Kosten (für die Kasse)
+            </p>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Input
+                label="Gesamtpreis"
+                optional
+                type="number"
+                inputMode="decimal"
+                min={0}
+                step="0.01"
+                placeholder="in Euro"
+                hint="Wird unter allen Mitgliedern aufgeteilt"
+                value={totalPrice}
+                onChange={(e) => setTotalPrice(e.target.value)}
+              />
+              <Select label="Bezahlt von" optional value={paidBy} onChange={(e) => setPaidBy(e.target.value)}>
+                {participants.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </Select>
+            </div>
+          </div>
+
           <div className="grid gap-4 sm:grid-cols-2">
             <Input label="Link zur Buchung" optional placeholder="https://…" maxLength={500} value={url} onChange={(e) => setUrl(e.target.value)} />
             <Input label="Bild-URL" optional placeholder="https://…" maxLength={1000} value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} />
@@ -414,27 +462,6 @@ function AccommodationPick({
               onChange={(e) => setAmenities(e.target.value)}
             />
           </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Input
-              label="Gesamtpreis"
-              optional
-              type="number"
-              inputMode="decimal"
-              min={0}
-              step="0.01"
-              placeholder="in Euro"
-              hint="Fließt als Posten in die Kasse ein"
-              value={totalPrice}
-              onChange={(e) => setTotalPrice(e.target.value)}
-            />
-            <Select label="Bezahlt von" optional value={paidBy} onChange={(e) => setPaidBy(e.target.value)}>
-              {participants.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </Select>
-          </div>
           <Textarea label="Notiz" optional rows={2} maxLength={500} value={note} onChange={(e) => setNote(e.target.value)} />
           <div className="flex justify-end gap-3">
             <Button type="button" variant="plain" onClick={() => setOpen(false)}>
@@ -447,5 +474,201 @@ function AccommodationPick({
         </form>
       </Dialog>
     </>
+  );
+}
+
+function StaySuggestions({
+  tripId,
+  isCreator,
+  myParticipantId,
+  onSelected,
+}: {
+  tripId: string;
+  isCreator: boolean;
+  myParticipantId: string;
+  onSelected: () => void;
+}) {
+  const { toast } = useToast();
+  const key = `/trips/${tripId}/stay-suggestions`;
+  const { data, error, isLoading, mutate } = useSWR<{ suggestions: TripStaySuggestion[] }>(key);
+
+  const [open, setOpen] = useState(false);
+  const [title, setTitle] = useState('');
+  const [address, setAddress] = useState('');
+  const [url, setUrl] = useState('');
+  const [imageUrl, setImageUrl] = useState('');
+  const [price, setPrice] = useState('');
+  const [note, setNote] = useState('');
+  const [formError, setFormError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  async function onSubmit(event: FormEvent) {
+    event.preventDefault();
+    if (!title.trim()) return;
+    setFormError(null);
+    setSaving(true);
+    try {
+      const priceValue = price.trim() ? Number(price.replace(',', '.')) : undefined;
+      await apiFetch(key, {
+        method: 'POST',
+        body: {
+          title: title.trim(),
+          address: address.trim() || undefined,
+          url: url.trim() || undefined,
+          imageUrl: imageUrl.trim() || undefined,
+          note: note.trim() || undefined,
+          price: priceValue !== undefined && priceValue >= 0 ? priceValue : undefined,
+        },
+      });
+      setTitle('');
+      setAddress('');
+      setUrl('');
+      setImageUrl('');
+      setPrice('');
+      setNote('');
+      setOpen(false);
+      await mutate();
+      toast('Vorschlag hinzugefügt', 'success');
+    } catch (err) {
+      setFormError(errorMessage(err));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function remove(id: string) {
+    setBusyId(id);
+    try {
+      await apiFetch(`${key}/${id}`, { method: 'DELETE' });
+      await mutate();
+    } catch (err) {
+      toast(errorMessage(err), 'error');
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function select(id: string) {
+    setBusyId(id);
+    try {
+      await apiFetch(`${key}/${id}/select`, { method: 'POST' });
+      onSelected();
+      toast('Als ausgewählte Unterkunft übernommen', 'success');
+    } catch (err) {
+      toast(errorMessage(err), 'error');
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  const suggestions = data?.suggestions ?? [];
+
+  return (
+    <section className="space-y-4" aria-labelledby="suggestions-heading">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h3 id="suggestions-heading" className="text-headline">
+            Vorschläge aus der Gruppe
+          </h3>
+          <p className="mt-0.5 text-footnote text-secondary">
+            Jede:r kann eine eigene Unterkunft eintragen – ganz ohne Booking.com oder Airbnb, z. B. einen Link oder
+            Kontakt, den jemand selbst gefunden hat.
+          </p>
+        </div>
+        <Button variant="tinted" size="sm" icon={<IconPlus size={16} />} onClick={() => setOpen(true)}>
+          Vorschlagen
+        </Button>
+      </div>
+
+      {isLoading && <Skeleton className="h-20" />}
+      {error && <Alert tone="error">{errorMessage(error)}</Alert>}
+      {data && suggestions.length === 0 && (
+        <div className="card">
+          <EmptyState icon={<IconHome size={24} />} title="Noch keine Vorschläge">
+            Hat jemand schon eine passende Unterkunft gefunden? Hier eintragen.
+          </EmptyState>
+        </div>
+      )}
+      {suggestions.length > 0 && (
+        <ul className="space-y-3">
+          {suggestions.map((s) => (
+            <li key={s.id} className="card space-y-2 p-5">
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-callout font-semibold">{s.title}</p>
+                  {s.address && <p className="text-footnote text-secondary">{s.address}</p>}
+                </div>
+                {s.price !== null && <Badge tone="neutral">{formatMoney(Number(s.price))}</Badge>}
+              </div>
+              {s.note && <p className="whitespace-pre-line text-callout text-secondary">{s.note}</p>}
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-2 pt-1">
+                <span className="text-footnote text-secondary">von {s.added_by_name}</span>
+                {s.url && (
+                  <a
+                    href={s.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 text-subhead font-medium text-accent hover:underline"
+                  >
+                    Ansehen <IconExternal size={13} />
+                  </a>
+                )}
+                <div className="ml-auto flex items-center gap-2">
+                  {isCreator && (
+                    <Button variant="tinted" size="sm" loading={busyId === s.id} onClick={() => select(s.id)}>
+                      Übernehmen
+                    </Button>
+                  )}
+                  {(isCreator || s.trip_user_id === myParticipantId) && (
+                    <button
+                      type="button"
+                      onClick={() => remove(s.id)}
+                      disabled={busyId === s.id}
+                      aria-label="Vorschlag löschen"
+                      className="h-8 w-8 shrink-0 rounded-full text-secondary transition hover:bg-danger/10 hover:text-danger disabled:opacity-40"
+                    >
+                      <IconTrash size={16} className="mx-auto" />
+                    </button>
+                  )}
+                </div>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <Dialog open={open} onClose={() => setOpen(false)} title="Unterkunft vorschlagen">
+        <form onSubmit={onSubmit} className="space-y-5 p-5 sm:p-6" noValidate>
+          {formError && <Alert tone="error">{formError}</Alert>}
+          <Input label="Name" placeholder="z. B. Ferienhaus am See" maxLength={200} value={title} onChange={(e) => setTitle(e.target.value)} />
+          <Input label="Adresse" optional placeholder="Straße, PLZ, Ort, Land" maxLength={300} value={address} onChange={(e) => setAddress(e.target.value)} />
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Input label="Link" optional placeholder="https://…" maxLength={500} value={url} onChange={(e) => setUrl(e.target.value)} />
+            <Input
+              label="Preis"
+              optional
+              type="number"
+              inputMode="decimal"
+              min={0}
+              step="0.01"
+              placeholder="in Euro, gesamt"
+              value={price}
+              onChange={(e) => setPrice(e.target.value)}
+            />
+          </div>
+          <Input label="Bild-URL" optional placeholder="https://…" maxLength={1000} value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} />
+          <Textarea label="Notiz" optional rows={2} maxLength={500} value={note} onChange={(e) => setNote(e.target.value)} />
+          <div className="flex justify-end gap-3">
+            <Button type="button" variant="plain" onClick={() => setOpen(false)}>
+              Abbrechen
+            </Button>
+            <Button type="submit" loading={saving} disabled={!title.trim()}>
+              Vorschlagen
+            </Button>
+          </div>
+        </form>
+      </Dialog>
+    </section>
   );
 }

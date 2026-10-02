@@ -306,3 +306,17 @@ export const IconScale = createIcon(
   </>,
   'IconScale'
 );
+export const IconDownload = createIcon(
+  <>
+    <path d="M12 3.5v12M7.5 11l4.5 4.5L16.5 11" />
+    <path d="M4.5 17.5v2a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-2" />
+  </>,
+  'IconDownload'
+);
+export const IconShare = createIcon(
+  <>
+    <path d="M12 3v12.5M8.3 6.7 12 3l3.7 3.7" />
+    <path d="M5.5 11v7.5a2 2 0 0 0 2 2h9a2 2 0 0 0 2-2V11" />
+  </>,
+  'IconShare'
+);

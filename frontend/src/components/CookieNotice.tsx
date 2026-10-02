@@ -5,7 +5,8 @@ import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { IconShield } from '@/components/ui/Icons';
 
-const STORAGE_KEY = 'tp_cookie_notice_v1';
+export const COOKIE_NOTICE_KEY = 'tp_cookie_notice_v1';
+const STORAGE_KEY = COOKIE_NOTICE_KEY;
 
 /**
  * Cookie-Hinweis beim ersten Besuch. Die App setzt ausschließlich den technisch notwendigen
@@ -29,6 +30,8 @@ export function CookieNotice() {
       /* Speicher nicht verfügbar: Hinweis erscheint beim nächsten Besuch erneut */
     }
     setVisible(false);
+    // Der Install-Hinweis wartet auf dieses Signal, damit nie zwei Banner übereinander stehen.
+    window.dispatchEvent(new Event('tp:cookie-accepted'));
   }
 
   if (!visible) return null;

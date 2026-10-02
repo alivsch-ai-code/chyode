@@ -17,6 +17,7 @@ import resultsRoutes from './routes/results.routes';
 import accommodationsRoutes from './routes/accommodations.routes';
 import groceriesRoutes from './routes/groceries.routes';
 import activitiesRoutes from './routes/activities.routes';
+import staySuggestionsRoutes from './routes/staySuggestions.routes';
 import expensesRoutes from './routes/expenses.routes';
 import settlementsRoutes from './routes/settlements.routes';
 import ledgerRoutes from './routes/ledger.routes';
@@ -51,6 +52,7 @@ export function createApp() {
   app.use('/api/trips/:tripId/preferences', preferencesRoutes);
   app.use('/api/trips/:tripId/results', resultsRoutes);
   app.use('/api/trips/:tripId/accommodations', accommodationsRoutes);
+  app.use('/api/trips/:tripId/stay-suggestions', staySuggestionsRoutes);
   app.use('/api/trips/:tripId/groceries', groceriesRoutes);
   app.use('/api/trips/:tripId/activities', activitiesRoutes);
   app.use('/api/trips/:tripId/expenses', expensesRoutes);

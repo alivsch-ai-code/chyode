@@ -216,7 +216,7 @@ export function LedgerTab({
           Ausgaben
         </h3>
 
-        {accommodationAmount !== null && (
+        {accommodationAmount !== null ? (
           <div className="flex items-center justify-between rounded-control bg-grouped px-3.5 py-3">
             <div>
               <p className="text-callout font-medium">Unterkunft</p>
@@ -226,6 +226,13 @@ export function LedgerTab({
             </div>
             <span className="text-callout font-semibold">{formatMoney(accommodationAmount)}</span>
           </div>
+        ) : (
+          trip.accommodation_title && (
+            <Alert tone="info">
+              Für „{trip.accommodation_title}" ist noch kein Preis eingetragen. Trag ihn im Tab „Unterkünfte" ein, dann
+              taucht er hier automatisch auf.
+            </Alert>
+          )
         )}
 
         <form onSubmit={onAddExpense} className="space-y-4" noValidate encType="multipart/form-data">

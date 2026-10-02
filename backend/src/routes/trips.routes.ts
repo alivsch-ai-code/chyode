@@ -12,6 +12,7 @@ import {
   releaseResults,
   hideResults,
   deleteTrip,
+  setTripMode,
   setAccommodationPick,
   clearAccommodationPick,
 } from '../controllers/trips.controller';
@@ -53,6 +54,8 @@ router.post(
   asyncHandler(hideResults)
 );
 router.delete('/:tripId', requireParticipantAuth, requireTripCreatorParticipant, asyncHandler(deleteTrip));
+
+router.patch('/:tripId/mode', requireParticipantAuth, requireTripCreatorParticipant, asyncHandler(setTripMode));
 
 router.put(
   '/:tripId/accommodation',

@@ -34,7 +34,7 @@ import { TRIP_STATUS_LABELS } from '@/lib/format';
 
 type TabId = 'overview' | 'dates' | 'prefs' | 'notes' | 'results' | 'stays' | 'food' | 'activities' | 'ideas';
 
-const TABS: TabItem<TabId>[] = [
+const VOTING_TABS: TabItem<TabId>[] = [
   { value: 'overview', label: 'Übersicht', icon: <IconUsers size={17} /> },
   { value: 'dates', label: 'Termine', icon: <IconCalendar size={17} /> },
   { value: 'prefs', label: 'Präferenzen', icon: <IconSparkles size={17} /> },
@@ -46,7 +46,19 @@ const TABS: TabItem<TabId>[] = [
   { value: 'ideas', label: 'Ideen', icon: <IconMountain size={17} /> },
 ];
 
-const isTabId = (value: string | null): value is TabId => TABS.some((t) => t.value === value);
+// Im Planungsmodus (schon gebucht) treten Termine/Präferenzen/Ergebnis in den Hintergrund;
+// Unterkunft, Essen und Aktivitäten stehen vorne.
+const PLANNING_TABS: TabItem<TabId>[] = [
+  { value: 'overview', label: 'Übersicht', icon: <IconUsers size={17} /> },
+  { value: 'stays', label: 'Unterkünfte', icon: <IconBed size={17} /> },
+  { value: 'food', label: 'Essen', icon: <IconUtensils size={17} /> },
+  { value: 'activities', label: 'Aktivitäten', icon: <IconCompass size={17} /> },
+  { value: 'notes', label: 'Notizen', icon: <IconNote size={17} /> },
+  { value: 'ideas', label: 'Ideen', icon: <IconMountain size={17} /> },
+];
+
+const ALL_TAB_IDS = [...new Set([...VOTING_TABS, ...PLANNING_TABS].map((t) => t.value))];
+const isTabId = (value: string | null): value is TabId => ALL_TAB_IDS.includes(value as TabId);
 
 export default function TripPage({ params }: { params: { tripId: string } }) {
   const { tripId } = params;
@@ -57,6 +69,7 @@ export default function TripPage({ params }: { params: { tripId: string } }) {
   });
   const [tab, setTab] = useState<TabId>('overview');
   const [isNew, setIsNew] = useState(false);
+  const tabs = data?.trip.mode === 'planning' ? PLANNING_TABS : VOTING_TABS;
 
   // Tab und "neu erstellt"-Hinweis aus der URL übernehmen
   useEffect(() => {
@@ -74,6 +87,12 @@ export default function TripPage({ params }: { params: { tripId: string } }) {
     window.history.replaceState(null, '', url);
     setIsNew(false);
   };
+
+  // Ist der aktuelle Tab im jetzigen Modus gar nicht verfügbar (z. B. nach einem Moduswechsel), zurück zur Übersicht
+  useEffect(() => {
+    if (data && !tabs.some((t) => t.value === tab)) changeTab('overview');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data?.trip.mode]);
 
   if (!allowed) return <PageLoading />;
   if (isLoading) return <PageLoading label="Reise wird geladen …" />;
@@ -113,11 +132,14 @@ export default function TripPage({ params }: { params: { tripId: string } }) {
                 <IconMapPin size={16} /> {trip.location}
               </span>
               <Badge tone={trip.status === 'voting' ? 'success' : 'neutral'}>{TRIP_STATUS_LABELS[trip.status]}</Badge>
+              <Badge tone={trip.mode === 'planning' ? 'accent' : 'neutral'}>
+                {trip.mode === 'planning' ? 'Planungsmodus' : 'Abstimmungsmodus'}
+              </Badge>
               {isCreator && <Badge tone="accent">Du bist Ersteller</Badge>}
             </p>
           </div>
         </header>
-        <Tabs tabs={TABS} value={tab} onChange={changeTab} idPrefix="trip" />
+        <Tabs tabs={tabs} value={tab} onChange={changeTab} idPrefix="trip" />
       </div>
 
       <div id={`trip-panel-${tab}`} role="tabpanel" aria-labelledby={`trip-tab-${tab}`} tabIndex={0} className="outline-none">

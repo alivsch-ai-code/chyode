@@ -7,11 +7,40 @@ import { AccommodationCard } from '@/components/AccommodationCard';
 import { Button } from '@/components/ui/Button';
 import { Dialog } from '@/components/ui/Dialog';
 import { Alert, Badge, EmptyState, Skeleton } from '@/components/ui/Feedback';
-import { IconBed, IconExternal, IconEyeLock, IconPlus, IconRefresh, IconSparkles, IconTrash } from '@/components/ui/Icons';
+import {
+  IconBed,
+  IconCheck,
+  IconExternal,
+  IconEyeLock,
+  IconFlower,
+  IconHome,
+  IconPlus,
+  IconRefresh,
+  IconSnowflake,
+  IconSparkles,
+  IconTrash,
+  IconUtensils,
+  IconWave,
+  type IconProps,
+} from '@/components/ui/Icons';
 import { Input, Textarea } from '@/components/ui/Field';
 import { useToast } from '@/components/ui/Toast';
 import { apiFetch, errorMessage } from '@/lib/api';
 import { formatDateTime } from '@/lib/format';
+import type { ComponentType } from 'react';
+
+// Grobe Zuordnung häufiger Ausstattungs-Stichworte zu einem passenden Icon (Freitext bleibt möglich).
+const AMENITY_ICONS: [RegExp, ComponentType<IconProps>][] = [
+  [/sauna|spa|wellness/i, IconFlower],
+  [/pool|schwimmbad|whirlpool/i, IconWave],
+  [/fr[üu]hst[üu]ck|breakfast/i, IconUtensils],
+  [/ski|piste/i, IconSnowflake],
+  [/kamin|ofen/i, IconHome],
+];
+
+function amenityIcon(label: string): ComponentType<IconProps> {
+  return AMENITY_ICONS.find(([re]) => re.test(label))?.[1] ?? IconCheck;
+}
 
 interface AccommodationResponse {
   topSuggestions: AccommodationSuggestion[];
@@ -283,11 +312,14 @@ function AccommodationPick({
             {trip.accommodation_note && <p className="whitespace-pre-line text-callout">{trip.accommodation_note}</p>}
             {trip.accommodation_amenities.length > 0 && (
               <div className="flex flex-wrap gap-1.5">
-                {trip.accommodation_amenities.map((a) => (
-                  <Badge key={a} tone="neutral">
-                    {a}
-                  </Badge>
-                ))}
+                {trip.accommodation_amenities.map((a) => {
+                  const Icon = amenityIcon(a);
+                  return (
+                    <Badge key={a} tone="neutral">
+                      <Icon size={12} /> {a}
+                    </Badge>
+                  );
+                })}
               </div>
             )}
             <div className="flex flex-wrap items-center gap-4 pt-1">

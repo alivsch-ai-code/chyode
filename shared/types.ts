@@ -17,10 +17,12 @@ export type ExperienceKey =
   | 'calm';
 export type DateMode = 'fixed' | 'multiple_choice';
 export type TripStatus = 'voting' | 'closed' | 'booked';
+export type TripMode = 'voting' | 'planning';
 export type ParticipantRole = 'creator' | 'participant';
 export type NoteCategory = 'wish' | 'idea' | 'requirement';
 export type SearchProvider = 'booking' | 'airbnb' | 'rapidapi';
 export type ActivityCategory = 'wellness' | 'nature' | 'sport' | 'food';
+export type MealCategory = 'breakfast' | 'lunch' | 'dinner' | 'other';
 
 export interface Trip {
   id: string;
@@ -35,6 +37,7 @@ export interface Trip {
   budget_per_person: string | null;
   invite_token: string;
   status: TripStatus;
+  mode: TripMode;
   results_released_at: string | null;
   results_notified_at: string | null;
   voting_closed_at: string | null;
@@ -57,6 +60,7 @@ export interface GroceryItem {
   trip_user_id: string;
   item: string;
   quantity: string | null;
+  category: MealCategory | null;
   note: string | null;
   price: string | null;
   checked_at: string | null;
@@ -80,6 +84,7 @@ export interface TripActivity {
   title: string;
   category: ActivityCategory | null;
   distance_km: string | null;
+  duration_min: number | null;
   price: string | null;
   description: string | null;
   link: string | null;

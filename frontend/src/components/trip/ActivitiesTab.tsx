@@ -19,6 +19,13 @@ const CATEGORY_TONES: Record<ActivityCategory, 'accent' | 'success' | 'warning' 
   food: 'neutral',
 };
 
+function formatDuration(min: number): string {
+  if (min < 60) return `${min} Min.`;
+  const hours = Math.floor(min / 60);
+  const rest = min % 60;
+  return rest === 0 ? `ca. ${hours} Std.` : `ca. ${hours}:${String(rest).padStart(2, '0')} Std.`;
+}
+
 export function ActivitiesTab({ tripId, myParticipantId }: { tripId: string; myParticipantId: string }) {
   const { toast } = useToast();
   const key = `/trips/${tripId}/activities`;
@@ -27,12 +34,14 @@ export function ActivitiesTab({ tripId, myParticipantId }: { tripId: string; myP
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState<ActivityCategory | ''>('');
   const [distance, setDistance] = useState('');
+  const [duration, setDuration] = useState('');
   const [price, setPrice] = useState('');
   const [description, setDescription] = useState('');
   const [link, setLink] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [filter, setFilter] = useState<ActivityCategory | 'all'>('all');
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
@@ -41,6 +50,7 @@ export function ActivitiesTab({ tripId, myParticipantId }: { tripId: string; myP
     setSaving(true);
     try {
       const distanceValue = distance.trim() ? Number(distance.replace(',', '.')) : undefined;
+      const durationValue = duration.trim() ? Math.round(Number(duration.replace(',', '.'))) : undefined;
       const priceValue = price.trim() ? Number(price.replace(',', '.')) : undefined;
       await apiFetch(key, {
         method: 'POST',
@@ -48,6 +58,7 @@ export function ActivitiesTab({ tripId, myParticipantId }: { tripId: string; myP
           title: title.trim(),
           category: category || undefined,
           distanceKm: distanceValue !== undefined && distanceValue >= 0 ? distanceValue : undefined,
+          durationMin: durationValue !== undefined && durationValue >= 0 ? durationValue : undefined,
           price: priceValue !== undefined && priceValue >= 0 ? priceValue : undefined,
           description: description.trim() || undefined,
           link: link.trim() || undefined,
@@ -56,6 +67,7 @@ export function ActivitiesTab({ tripId, myParticipantId }: { tripId: string; myP
       setTitle('');
       setCategory('');
       setDistance('');
+      setDuration('');
       setPrice('');
       setDescription('');
       setLink('');
@@ -81,6 +93,8 @@ export function ActivitiesTab({ tripId, myParticipantId }: { tripId: string; myP
   }
 
   const activities = data?.activities ?? [];
+  const filtered = filter === 'all' ? activities : activities.filter((a) => a.category === filter);
+  const countByCategory = (cat: ActivityCategory) => activities.filter((a) => a.category === cat).length;
 
   return (
     <div className="space-y-8">
@@ -94,7 +108,7 @@ export function ActivitiesTab({ tripId, myParticipantId }: { tripId: string; myP
       <form onSubmit={onSubmit} className="card space-y-5 p-5 sm:p-6" noValidate>
         {formError && <Alert tone="error">{formError}</Alert>}
         <Input label="Titel" placeholder="z. B. Schneeschuhwanderung zur Galsterberghütte" maxLength={200} value={title} onChange={(e) => setTitle(e.target.value)} />
-        <div className="grid gap-4 sm:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2">
           <Select label="Kategorie" optional value={category} onChange={(e) => setCategory(e.target.value as ActivityCategory | '')}>
             <option value="">Keine Angabe</option>
             {ACTIVITY_CATEGORIES.map((c) => (
@@ -103,6 +117,19 @@ export function ActivitiesTab({ tripId, myParticipantId }: { tripId: string; myP
               </option>
             ))}
           </Select>
+          <Input
+            label="Preis pro Person"
+            optional
+            type="number"
+            inputMode="decimal"
+            min={0}
+            step="0.01"
+            placeholder="in Euro"
+            value={price}
+            onChange={(e) => setPrice(e.target.value)}
+          />
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2">
           <Input
             label="Entfernung"
             optional
@@ -115,15 +142,14 @@ export function ActivitiesTab({ tripId, myParticipantId }: { tripId: string; myP
             onChange={(e) => setDistance(e.target.value)}
           />
           <Input
-            label="Preis pro Person"
+            label="Dauer"
             optional
             type="number"
-            inputMode="decimal"
+            inputMode="numeric"
             min={0}
-            step="0.01"
-            placeholder="in Euro"
-            value={price}
-            onChange={(e) => setPrice(e.target.value)}
+            placeholder="in Minuten"
+            value={duration}
+            onChange={(e) => setDuration(e.target.value)}
           />
         </div>
         <Textarea
@@ -148,6 +174,23 @@ export function ActivitiesTab({ tripId, myParticipantId }: { tripId: string; myP
         </Button>
       </form>
 
+      {activities.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Nach Kategorie filtern">
+          <FilterChip active={filter === 'all'} onClick={() => setFilter('all')}>
+            Alle · {activities.length}
+          </FilterChip>
+          {ACTIVITY_CATEGORIES.map((c) => {
+            const count = countByCategory(c.key);
+            if (count === 0) return null;
+            return (
+              <FilterChip key={c.key} active={filter === c.key} onClick={() => setFilter(c.key)}>
+                {c.label} · {count}
+              </FilterChip>
+            );
+          })}
+        </div>
+      )}
+
       <section aria-label="Gesammelte Aktivitäten" className="space-y-3">
         {isLoading && <Skeleton className="h-24" />}
         {error && <Alert tone="error">{errorMessage(error)}</Alert>}
@@ -158,9 +201,12 @@ export function ActivitiesTab({ tripId, myParticipantId }: { tripId: string; myP
             </EmptyState>
           </div>
         )}
-        {activities.length > 0 && (
+        {activities.length > 0 && filtered.length === 0 && (
+          <Alert tone="info">Keine Aktivitäten in dieser Kategorie.</Alert>
+        )}
+        {filtered.length > 0 && (
           <ul className="space-y-3">
-            {activities.map((activity) => (
+            {filtered.map((activity) => (
               <li key={activity.id} className="card space-y-2 p-5">
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div className="flex flex-wrap items-center gap-2">
@@ -184,6 +230,7 @@ export function ActivitiesTab({ tripId, myParticipantId }: { tripId: string; myP
                 {activity.description && <p className="whitespace-pre-line text-callout text-secondary">{activity.description}</p>}
                 <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-footnote text-secondary">
                   {activity.distance_km !== null && <span>{Number(activity.distance_km)} km entfernt</span>}
+                  {activity.duration_min !== null && <span>{formatDuration(activity.duration_min)}</span>}
                   {activity.price !== null && <span>{Number(activity.price) === 0 ? 'Kostenlos' : formatMoney(Number(activity.price))}</span>}
                   <span>von {activity.added_by_name}</span>
                 </p>
@@ -203,5 +250,20 @@ export function ActivitiesTab({ tripId, myParticipantId }: { tripId: string; myP
         )}
       </section>
     </div>
+  );
+}
+
+function FilterChip({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={`rounded-full px-3.5 py-1.5 text-footnote font-medium transition ${
+        active ? 'bg-accent text-white dark:text-black' : 'bg-fill/12 text-label hover:bg-fill/20'
+      }`}
+    >
+      {children}
+    </button>
   );
 }

@@ -8,6 +8,7 @@ import { isUuid } from '../middleware/auth';
 const addGroceryItemSchema = z.object({
   item: z.string().trim().min(1, 'Bitte gib an, was du brauchst').max(200),
   quantity: z.string().trim().max(60).optional(),
+  category: z.enum(['breakfast', 'lunch', 'dinner', 'other']).optional(),
   note: z.string().trim().max(300).optional(),
   price: z.number().min(0).max(10000).optional(),
 });
@@ -19,12 +20,12 @@ export async function addGroceryItem(req: Request, res: Response) {
 
   const parsed = addGroceryItemSchema.safeParse(req.body);
   if (!parsed.success) throw badRequest(parsed.error.issues[0].message);
-  const { item, quantity, note, price } = parsed.data;
+  const { item, quantity, category, note, price } = parsed.data;
 
   const result = await query<GroceryItem>(
-    `INSERT INTO grocery_items (trip_id, trip_user_id, item, quantity, note, price)
-     VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-    [tripId, req.participant!.id, item, quantity || null, note || null, price ?? null]
+    `INSERT INTO grocery_items (trip_id, trip_user_id, item, quantity, category, note, price)
+     VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+    [tripId, req.participant!.id, item, quantity || null, category ?? null, note || null, price ?? null]
   );
   res.status(201).json({ item: result.rows[0] });
 }

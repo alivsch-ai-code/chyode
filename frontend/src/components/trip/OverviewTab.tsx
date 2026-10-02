@@ -30,6 +30,7 @@ export function OverviewTab({
   const [confirmClose, setConfirmClose] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [reopening, setReopening] = useState(false);
+  const [switchingMode, setSwitchingMode] = useState(false);
   const isCreator = myRole === 'creator';
   const canShare = typeof navigator !== 'undefined' && typeof navigator.share === 'function';
 
@@ -66,6 +67,17 @@ export function OverviewTab({
       toast('Abstimmung wieder geöffnet', 'success');
     } finally {
       setReopening(false);
+    }
+  }
+
+  async function switchMode(mode: 'voting' | 'planning') {
+    setSwitchingMode(true);
+    try {
+      await apiFetch(`/trips/${trip.id}/mode`, { method: 'PATCH', body: { mode } });
+      await onChanged();
+      toast(mode === 'planning' ? 'Zur Planung gewechselt' : 'Zurück zur Abstimmung gewechselt', 'success');
+    } finally {
+      setSwitchingMode(false);
     }
   }
 
@@ -147,21 +159,42 @@ export function OverviewTab({
             <h2 id="status-heading" className="text-title3">
               Status
             </h2>
-            <p className="mt-1 flex items-center gap-2 text-callout text-secondary">
+            <p className="mt-1 flex flex-wrap items-center gap-2 text-callout text-secondary">
               <Badge tone={trip.status === 'voting' ? 'success' : 'neutral'}>{TRIP_STATUS_LABELS[trip.status]}</Badge>
+              <Badge tone={trip.mode === 'planning' ? 'accent' : 'neutral'}>
+                {trip.mode === 'planning' ? 'Planungsmodus' : 'Abstimmungsmodus'}
+              </Badge>
             </p>
           </div>
-          {isCreator && trip.status === 'voting' && (
-            <Button variant="plain" onClick={() => setConfirmClose(true)}>
-              Abstimmung beenden
-            </Button>
-          )}
-          {isCreator && trip.status === 'closed' && (
-            <Button variant="plain" loading={reopening} onClick={reopenVoting}>
-              Abstimmung wieder öffnen
-            </Button>
-          )}
+          <div className="flex flex-wrap items-center gap-2">
+            {isCreator && trip.status === 'voting' && (
+              <Button variant="plain" onClick={() => setConfirmClose(true)}>
+                Abstimmung beenden
+              </Button>
+            )}
+            {isCreator && trip.status === 'closed' && (
+              <Button variant="plain" loading={reopening} onClick={reopenVoting}>
+                Abstimmung wieder öffnen
+              </Button>
+            )}
+            {isCreator && trip.mode === 'voting' && (
+              <Button variant="tinted" loading={switchingMode} onClick={() => switchMode('planning')}>
+                Zur Planung wechseln
+              </Button>
+            )}
+            {isCreator && trip.mode === 'planning' && (
+              <Button variant="plain" loading={switchingMode} onClick={() => switchMode('voting')}>
+                Zurück zur Abstimmung
+              </Button>
+            )}
+          </div>
         </div>
+        {trip.mode === 'planning' && (
+          <p className="mt-3 text-footnote text-secondary">
+            Im Planungsmodus stehen Termine, Präferenzen und Ergebnis im Hintergrund – der Fokus liegt auf Essen,
+            Aktivitäten und Unterkunft.
+          </p>
+        )}
       </section>
 
       {isCreator && progress && (

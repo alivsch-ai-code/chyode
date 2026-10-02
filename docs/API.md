@@ -178,6 +178,12 @@ Löscht die Reise samt aller Daten sofort (nur Ersteller) → `204`.
 `GET /trips/:tripId` liefert zusätzlich `resultsReleased`, `resultsNotified` und – nur für den
 Ersteller – `progress: { voted, total }`.
 
+### `PATCH /trips/:tripId/mode`
+Wechselt zwischen Abstimmung und Planung (nur Ersteller): `{ "mode": "voting" }` oder
+`{ "mode": "planning" }`. Im Planungsmodus (schon gebucht) treten Termine, Präferenzen und
+Ergebnis im Frontend in den Hintergrund; der Fokus liegt auf Unterkunft, Essen und Aktivitäten.
+Jederzeit reversibel.
+
 ---
 
 ## Terminoptionen
@@ -361,9 +367,10 @@ Preis lässt sich die Summe am Ende aufteilen.
 
 ### `POST /trips/:tripId/groceries`
 ```json
-{ "item": "Grillfleisch", "quantity": "2 kg", "price": 24.5 }
+{ "item": "Grillfleisch", "quantity": "2 kg", "category": "dinner", "note": "bitte mager", "price": 24.5 }
 ```
-`quantity` und `price` sind optional.
+Alle Felder außer `item` sind optional. `category` ist eine von `breakfast`, `lunch`, `dinner`,
+`other` und gruppiert die Liste im Frontend nach Mahlzeit.
 
 ### `GET /trips/:tripId/groceries`
 Alle Einträge, offene zuerst, inkl. `added_by_name` und – falls abgehakt – `checked_by_name`.
@@ -400,13 +407,14 @@ eingetragen, ohne Anbindung an Google Places o. Ä.
   "title": "Schneeschuhwanderung zur Galsterberghütte",
   "category": "nature",
   "distanceKm": 6.5,
+  "durationMin": 60,
   "price": 0,
-  "description": "Ca. 2,5 Std., leicht, Start direkt am Chalet.",
+  "description": "Leicht, Start direkt am Chalet.",
   "link": "https://www.google.com/maps/search/?api=1&query=Galsterberghütte"
 }
 ```
 `category` ist eine von `wellness`, `nature`, `sport`, `food`; alle Felder außer `title` sind
-optional.
+optional. `durationMin` ist die geschätzte Dauer in Minuten.
 
 ### `GET /trips/:tripId/activities`
 Alle Aktivitäten, nächstgelegene zuerst, inkl. `added_by_name`.

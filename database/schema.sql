@@ -95,6 +95,8 @@ CREATE TABLE IF NOT EXISTS trips (
   invite_token        TEXT UNIQUE NOT NULL,
   status              TEXT NOT NULL DEFAULT 'voting'
                        CHECK (status IN ('voting', 'closed', 'booked')),
+  -- 'voting': klassische Abstimmung. 'planning': schon gebucht, Fokus auf Essen/Aktivitäten/Unterkunft.
+  mode                TEXT NOT NULL DEFAULT 'voting' CHECK (mode IN ('voting', 'planning')),
   results_released_at TIMESTAMPTZ,        -- solange NULL, sehen nur Ersteller die Auswertung
   results_notified_at TIMESTAMPTZ,        -- Teilnehmer wurden per Mail über das Ergebnis informiert
   voting_closed_at    TIMESTAMPTZ,        -- Beginn der automatischen Löschfrist
@@ -203,6 +205,44 @@ CREATE TABLE IF NOT EXISTS notes (
 );
 
 CREATE INDEX IF NOT EXISTS idx_notes_trip_id ON notes(trip_id);
+
+-- ------------------------------------------------------------
+-- grocery_items: gemeinsame Einkaufsliste (Wunsch und Artikel sind bewusst ein Eintrag)
+-- ------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS grocery_items (
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  trip_id       UUID NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
+  trip_user_id  UUID NOT NULL REFERENCES trip_users(id) ON DELETE CASCADE,  -- wer es eingetragen hat/möchte
+  item          TEXT NOT NULL,
+  quantity      TEXT,                                          -- z. B. "2 Packungen", "1 kg"
+  category      TEXT CHECK (category IS NULL OR category IN ('breakfast', 'lunch', 'dinner', 'other')),
+  note          TEXT,                                          -- z. B. Allergie-Hinweis
+  price         NUMERIC(10, 2) CHECK (price >= 0),              -- Preis des Artikels, für die Kostenaufteilung
+  checked_at    TIMESTAMPTZ,                                    -- gesetzt, sobald jemand es gekauft/abgehakt hat
+  checked_by    UUID REFERENCES trip_users(id) ON DELETE SET NULL,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_grocery_items_trip_id ON grocery_items(trip_id);
+
+-- ------------------------------------------------------------
+-- trip_activities: gesammelte Aktivitäten/Routen in der Nähe (manuell gepflegt, keine externe API)
+-- ------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS trip_activities (
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  trip_id       UUID NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
+  trip_user_id  UUID NOT NULL REFERENCES trip_users(id) ON DELETE CASCADE,
+  title         TEXT NOT NULL,
+  category      TEXT CHECK (category IS NULL OR category IN ('wellness', 'nature', 'sport', 'food')),
+  distance_km   NUMERIC(6, 1) CHECK (distance_km >= 0),
+  duration_min  INTEGER CHECK (duration_min >= 0),
+  price         NUMERIC(10, 2) CHECK (price >= 0),
+  description   TEXT,
+  link          TEXT,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_trip_activities_trip_id ON trip_activities(trip_id);
 
 -- ------------------------------------------------------------
 -- search_results_cache: gecachte Ergebnisse externer Booking-APIs

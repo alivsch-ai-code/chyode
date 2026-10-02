@@ -21,6 +21,8 @@ const createTripSchema = z.object({
   title: z.string().trim().min(1, 'Bitte gib einen Titel ein').max(200),
   location: z.string().trim().min(1, 'Bitte gib eine Region oder einen Ort ein').max(200),
   tripType: z.enum(['hut', 'chalet', 'hotel', 'wellness', 'apartment', 'glamping', 'other']).default('other'),
+  // 'voting': klassische Abstimmung. 'planning': schon gebucht, Fokus auf Essen/Aktivitäten/Unterkunft.
+  mode: z.enum(['voting', 'planning']).default('voting'),
   dateMode: z.enum(['fixed', 'multiple_choice']).default('multiple_choice'),
   startDate: isoDate.optional(),
   endDate: isoDate.optional(),
@@ -55,14 +57,15 @@ export async function createTrip(req: Request, res: Response) {
   const trip = await withTransaction(async (client) => {
     const tripResult = await client.query<Trip>(
       `INSERT INTO trips
-        (creator_id, title, location, trip_type, date_mode, start_date, end_date, nights, budget_per_person, invite_token)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        (creator_id, title, location, trip_type, mode, date_mode, start_date, end_date, nights, budget_per_person, invite_token)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
        RETURNING *`,
       [
         user.id,
         data.title,
         data.location,
         data.tripType,
+        data.mode,
         data.dateMode,
         data.startDate ?? null,
         data.endDate ?? null,
@@ -245,6 +248,25 @@ export async function deleteTrip(req: Request, res: Response) {
 
   await query('DELETE FROM trips WHERE id = $1', [tripId]);
   res.status(204).send();
+}
+
+const tripModeSchema = z.object({ mode: z.enum(['voting', 'planning']) });
+
+/**
+ * PATCH /api/trips/:tripId/mode — wechselt zwischen Abstimmung und Planung (nur Ersteller).
+ * Typischer Ablauf: Trip startet als "voting", nach der Buchung wechselt der Ersteller auf
+ * "planning" und der Fokus verschiebt sich auf Essen, Aktivitäten und Unterkunft.
+ */
+export async function setTripMode(req: Request, res: Response) {
+  const { tripId } = req.params;
+  if (req.participant!.tripId !== tripId) throw forbidden();
+
+  const parsed = tripModeSchema.safeParse(req.body);
+  if (!parsed.success) throw badRequest(parsed.error.issues[0].message);
+
+  const result = await query<Trip>('UPDATE trips SET mode = $2 WHERE id = $1 RETURNING *', [tripId, parsed.data.mode]);
+  if (!result.rows[0]) throw notFound('Trip nicht gefunden');
+  res.json({ trip: result.rows[0] });
 }
 
 const accommodationPickSchema = z.object({

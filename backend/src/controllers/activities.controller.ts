@@ -9,6 +9,7 @@ const addActivitySchema = z.object({
   title: z.string().trim().min(1, 'Bitte gib einen Titel ein').max(200),
   category: z.enum(['wellness', 'nature', 'sport', 'food']).optional(),
   distanceKm: z.number().min(0).max(500).optional(),
+  durationMin: z.number().int().min(0).max(1440).optional(),
   price: z.number().min(0).max(10000).optional(),
   description: z.string().trim().max(500).optional(),
   link: z
@@ -26,12 +27,22 @@ export async function addActivity(req: Request, res: Response) {
 
   const parsed = addActivitySchema.safeParse(req.body);
   if (!parsed.success) throw badRequest(parsed.error.issues[0].message);
-  const { title, category, distanceKm, price, description, link } = parsed.data;
+  const { title, category, distanceKm, durationMin, price, description, link } = parsed.data;
 
   const result = await query<TripActivity>(
-    `INSERT INTO trip_activities (trip_id, trip_user_id, title, category, distance_km, price, description, link)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
-    [tripId, req.participant!.id, title, category ?? null, distanceKm ?? null, price ?? null, description || null, link || null]
+    `INSERT INTO trip_activities (trip_id, trip_user_id, title, category, distance_km, duration_min, price, description, link)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
+    [
+      tripId,
+      req.participant!.id,
+      title,
+      category ?? null,
+      distanceKm ?? null,
+      durationMin ?? null,
+      price ?? null,
+      description || null,
+      link || null,
+    ]
   );
   res.status(201).json({ activity: result.rows[0] });
 }

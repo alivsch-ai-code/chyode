@@ -1,5 +1,5 @@
 import type { ComponentType } from 'react';
-import type { AccommodationTypeKey, ActivityCategory, ExperienceKey, TripType } from '@shared/types';
+import type { AccommodationTypeKey, ActivityCategory, ExperienceKey, MealCategory, TripType } from '@shared/types';
 import {
   IconBed,
   IconBuilding,
@@ -12,6 +12,7 @@ import {
   IconMusic,
   IconSnowflake,
   IconSparkles,
+  IconSun,
   IconTent,
   IconUtensils,
   IconWave,
@@ -59,6 +60,18 @@ export const ACTIVITY_CATEGORIES: CatalogItem<ActivityCategory>[] = [
 export const ACTIVITY_CATEGORY_LABELS = Object.fromEntries(
   ACTIVITY_CATEGORIES.map((c) => [c.key, c.label])
 ) as Record<ActivityCategory, string>;
+
+/** Mahlzeiten-Kategorien zur Gruppierung der Einkaufsliste. */
+export const MEAL_CATEGORIES: CatalogItem<MealCategory>[] = [
+  { key: 'breakfast', label: 'Frühstück', description: 'Brötchen, Kaffee, Eier …', icon: IconSun },
+  { key: 'lunch', label: 'Mittag', description: 'Nudeln, Salat, Brot …', icon: IconUtensils },
+  { key: 'dinner', label: 'Abend', description: 'Grillen, Wein, Snacks …', icon: IconMoon },
+  { key: 'other', label: 'Sonstiges', description: 'Wasser, Kaffee, Haushalt …', icon: IconSparkles },
+];
+
+export const MEAL_CATEGORY_LABELS = Object.fromEntries(
+  MEAL_CATEGORIES.map((c) => [c.key, c.label])
+) as Record<MealCategory, string>;
 
 export const MAX_EXPERIENCES = 4;
 export const MAX_ACCOMMODATION_TYPES = 3;

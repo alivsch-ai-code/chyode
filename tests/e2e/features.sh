@@ -41,6 +41,13 @@ check "Teilnehmer 2 tritt bei" 201 "$(jcode POST $J2 $API/trips/invite/$IT/join)
 D1=$(curl -s -b $JC $API/trips/$TID/date-options | jq -r '.dateOptions[0].id')
 check "Termin hat Vorschlagenden (Ersteller)" true "$(curl -s -b $J1 $API/trips/$TID/date-options | jq -r '.dateOptions[0].proposed_by_creator')"
 
+echo "== Modus (Abstimmung/Planung) =="
+check "Standardmodus ist 'voting'" voting "$(echo "$TRIP" | jq -r .trip.mode)"
+check "Nicht-Ersteller darf Modus nicht wechseln" 403 "$(jcode PATCH $J1 $API/trips/$TID/mode '{"mode":"planning"}')"
+check "Ungültiger Modus abgelehnt" 400 "$(jcode PATCH $JC $API/trips/$TID/mode '{"mode":"party"}')"
+check "Ersteller wechselt zu 'planning'" planning "$(curl -s -b $JC -X PATCH -H 'Content-Type: application/json' -d '{"mode":"planning"}' $API/trips/$TID/mode | jq -r .trip.mode)"
+check "Zurück zu 'voting'" voting "$(curl -s -b $JC -X PATCH -H 'Content-Type: application/json' -d '{"mode":"voting"}' $API/trips/$TID/mode | jq -r .trip.mode)"
+
 echo "== Präferenzen =="
 PREF() { echo "{\"budgetAccommodation\":$1,\"budgetActivities\":$2,\"experiences\":$3,\"accommodationTypes\":$4}"; }
 check "Vorher keine Präferenzen" null "$(curl -s -b $J1 $API/trips/$TID/preferences/me | jq -r .preferences)"
@@ -133,8 +140,10 @@ check "Artikel mit Preis (Teilnehmer 1)" 201 "$(jcode POST $J1 $API/trips/$TID/g
 check "Artikel mit Preis (Teilnehmer 2)" 201 "$(jcode POST $J2 $API/trips/$TID/groceries '{"item":"Bier","price":11.5}')"
 check "Artikel ohne Preis (Ersteller)" 201 "$(jcode POST $JC $API/trips/$TID/groceries '{"item":"Brot"}')"
 check "Negativer Preis abgelehnt" 400 "$(jcode POST $J1 $API/trips/$TID/groceries '{"item":"X","price":-1}')"
+check "Unbekannte Mahlzeit abgelehnt" 400 "$(jcode POST $J1 $API/trips/$TID/groceries '{"item":"X","category":"brunch"}')"
+check "Artikel mit Mahlzeit-Kategorie" breakfast "$(curl -s -b $JC -X POST -H 'Content-Type: application/json' -d '{"item":"Brötchen","category":"breakfast"}' $API/trips/$TID/groceries | jq -r .item.category)"
 check "Nicht-Mitglied darf nicht sehen" 403 "$(jcode GET $J3 $API/trips/$TID/groceries)"
-check "Liste zeigt 3 Artikel" 3 "$(curl -s -b $JC $API/trips/$TID/groceries | jq '.items | length')"
+check "Liste zeigt 4 Artikel" 4 "$(curl -s -b $JC $API/trips/$TID/groceries | jq '.items | length')"
 BIER=$(curl -s -b $JC $API/trips/$TID/groceries | jq -r '.items[] | select(.item=="Bier") | .id')
 check "Jedes Mitglied darf abhaken" true "$(curl -s -b $JC -X PATCH $API/trips/$TID/groceries/$BIER/toggle | jq -r '.item.checked_at != null')"
 check "  abgehakt von Ersteller vermerkt" "E2E Ersteller" "$(curl -s -b $J1 $API/trips/$TID/groceries | jq -r '.items[] | select(.id=="'$BIER'") | .checked_by_name')"
@@ -146,19 +155,21 @@ GRILL=$(curl -s -b $JC $API/trips/$TID/groceries | jq -r '.items[] | select(.ite
 BROT=$(curl -s -b $JC $API/trips/$TID/groceries | jq -r '.items[] | select(.item=="Brot") | .id')
 check "Fremden Artikel löschen verboten" 403 "$(jcode DELETE $J2 $API/trips/$TID/groceries/$BROT)"
 check "Eigenen Artikel löschen erlaubt" 204 "$(jcode DELETE $J1 $API/trips/$TID/groceries/$GRILL)"
-check "Noch 2 Artikel übrig" 2 "$($PSQL -c "select count(*) from grocery_items where trip_id='$TID'")"
+check "Noch 3 Artikel übrig" 3 "$($PSQL -c "select count(*) from grocery_items where trip_id='$TID'")"
 
 echo "== Aktivitäten =="
 check "Aktivität mit Kategorie (Ersteller)" 201 "$(jcode POST $JC $API/trips/$TID/activities '{"title":"Schneeschuhwanderung zur Galsterberghütte","category":"nature","distanceKm":6.5,"price":0,"link":"https://www.google.com/maps/search/?api=1&query=Galsterbergh%C3%BCtte"}')"
 check "Aktivität ohne Entfernung (Teilnehmer 1)" 201 "$(jcode POST $J1 $API/trips/$TID/activities '{"title":"Sauna-Gang","category":"wellness"}')"
 check "Unbekannte Kategorie abgelehnt" 400 "$(jcode POST $J1 $API/trips/$TID/activities '{"title":"X","category":"party"}')"
 check "Link ohne https abgelehnt" 400 "$(jcode POST $J1 $API/trips/$TID/activities '{"title":"X","link":"ftp://example.com"}')"
+check "Negative Dauer abgelehnt" 400 "$(jcode POST $J1 $API/trips/$TID/activities '{"title":"X","durationMin":-5}')"
+check "Dauer wird gespeichert" 60 "$(curl -s -b $JC -X POST -H 'Content-Type: application/json' -d '{"title":"Sauna-Gang 2","category":"wellness","durationMin":60}' $API/trips/$TID/activities | jq -r .activity.duration_min)"
 check "Nicht-Mitglied darf nicht sehen" 403 "$(jcode GET $J3 $API/trips/$TID/activities)"
 check "Nächstgelegene zuerst" "Schneeschuhwanderung zur Galsterberghütte" "$(curl -s -b $JC $API/trips/$TID/activities | jq -r '.activities[0].title')"
 SAUNA=$(curl -s -b $JC $API/trips/$TID/activities | jq -r '.activities[] | select(.title=="Sauna-Gang") | .id')
 check "Fremde Aktivität löschen verboten" 403 "$(jcode DELETE $J2 $API/trips/$TID/activities/$SAUNA)"
 check "Ersteller löscht fremde Aktivität" 204 "$(jcode DELETE $JC $API/trips/$TID/activities/$SAUNA)"
-check "Noch 1 Aktivität übrig" 1 "$($PSQL -c "select count(*) from trip_activities where trip_id='$TID'")"
+check "Noch 2 Aktivitäten übrig" 2 "$($PSQL -c "select count(*) from trip_activities where trip_id='$TID'")"
 
 echo "== Ausgewählte Unterkunft =="
 check "Nicht-Ersteller darf nicht setzen" 403 "$(jcode PUT $J1 $API/trips/$TID/accommodation '{"title":"X"}')"

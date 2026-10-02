@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-import type { AccommodationTypeKey, Trip } from '@shared/types';
+import type { AccommodationTypeKey, Trip, TripMode } from '@shared/types';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Field';
 import { Alert, Badge } from '@/components/ui/Feedback';
@@ -23,6 +23,7 @@ const STEPS = ['Details', 'Termine', 'Überblick'];
 export function TripForm() {
   const router = useRouter();
   const [step, setStep] = useState<Step>(0);
+  const [mode, setMode] = useState<TripMode>('voting');
   const [title, setTitle] = useState('');
   const [location, setLocation] = useState('');
   const [tripType, setTripType] = useState<AccommodationTypeKey>('hut');
@@ -66,6 +67,7 @@ export function TripForm() {
           title: title.trim(),
           location: location.trim(),
           tripType,
+          mode,
           dateMode,
           nights,
           ...(dateMode === 'fixed'
@@ -113,6 +115,19 @@ export function TripForm() {
               Worum geht es?
             </h2>
             <p className="mt-1 text-callout text-secondary">Gib deiner Reise einen Namen und sag, wohin es gehen soll.</p>
+          </div>
+          <div>
+            <p className="text-subhead font-medium">Wird noch abgestimmt oder ist schon gebucht?</p>
+            <p className="mb-3 mt-0.5 text-footnote text-secondary">Lässt sich später jederzeit wieder ändern.</p>
+            <Segmented
+              ariaLabel="Modus"
+              value={mode}
+              onChange={setMode}
+              options={[
+                { value: 'voting', label: 'Wir stimmen noch ab' },
+                { value: 'planning', label: 'Ist schon gebucht' },
+              ]}
+            />
           </div>
           <Input
             label="Titel"
@@ -197,6 +212,7 @@ export function TripForm() {
           </div>
 
           <dl className="divide-y divide-line/60 rounded-control bg-grouped px-4 text-callout">
+            <SummaryRow label="Modus">{mode === 'planning' ? 'Ist schon gebucht' : 'Wir stimmen noch ab'}</SummaryRow>
             <SummaryRow label="Titel">{title.trim()}</SummaryRow>
             <SummaryRow label="Ort">{location.trim()}</SummaryRow>
             <SummaryRow label="Unterkunft">{TRIP_TYPE_LABELS[tripType]}</SummaryRow>

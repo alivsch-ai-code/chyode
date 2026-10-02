@@ -2,7 +2,7 @@
 
 import { useEffect, useState, type FormEvent } from 'react';
 import useSWR from 'swr';
-import type { AccommodationSuggestion, Trip } from '@shared/types';
+import type { AccommodationSuggestion, Trip, TripParticipant } from '@shared/types';
 import { AccommodationCard } from '@/components/AccommodationCard';
 import { Button } from '@/components/ui/Button';
 import { Dialog } from '@/components/ui/Dialog';
@@ -23,10 +23,10 @@ import {
   IconWave,
   type IconProps,
 } from '@/components/ui/Icons';
-import { Input, Textarea } from '@/components/ui/Field';
+import { Input, Select, Textarea } from '@/components/ui/Field';
 import { useToast } from '@/components/ui/Toast';
 import { apiFetch, errorMessage } from '@/lib/api';
-import { formatDateTime } from '@/lib/format';
+import { formatDateTime, formatMoney } from '@/lib/format';
 import type { ComponentType } from 'react';
 
 // Grobe Zuordnung häufiger Ausstattungs-Stichworte zu einem passenden Icon (Freitext bleibt möglich).
@@ -55,12 +55,14 @@ export function StaysTab({
   isCreator,
   canSeeResults,
   trip,
+  participants,
   onTripChanged,
 }: {
   tripId: string;
   isCreator: boolean;
   canSeeResults: boolean;
   trip: Trip;
+  participants: TripParticipant[];
   onTripChanged: () => void;
 }) {
   const { toast } = useToast();
@@ -105,7 +107,13 @@ export function StaysTab({
         </p>
       </div>
 
-      <AccommodationPick tripId={tripId} trip={trip} isCreator={isCreator} onChanged={onTripChanged} />
+      <AccommodationPick
+        tripId={tripId}
+        trip={trip}
+        isCreator={isCreator}
+        participants={participants}
+        onChanged={onTripChanged}
+      />
 
       {!canSeeResults ? (
         <div className="card">
@@ -208,11 +216,13 @@ function AccommodationPick({
   tripId,
   trip,
   isCreator,
+  participants,
   onChanged,
 }: {
   tripId: string;
   trip: Trip;
   isCreator: boolean;
+  participants: TripParticipant[];
   onChanged: () => void;
 }) {
   const { toast } = useToast();
@@ -224,6 +234,8 @@ function AccommodationPick({
   const [note, setNote] = useState('');
   const [rating, setRating] = useState('');
   const [amenities, setAmenities] = useState('');
+  const [totalPrice, setTotalPrice] = useState('');
+  const [paidBy, setPaidBy] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [clearing, setClearing] = useState(false);
@@ -239,6 +251,8 @@ function AccommodationPick({
     setNote(trip.accommodation_note ?? '');
     setRating(trip.accommodation_rating ?? '');
     setAmenities((trip.accommodation_amenities ?? []).join(', '));
+    setTotalPrice(trip.accommodation_total_price ?? '');
+    setPaidBy(trip.accommodation_paid_by ?? participants[0]?.id ?? '');
     setFormError(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
@@ -250,6 +264,7 @@ function AccommodationPick({
     setSaving(true);
     try {
       const ratingValue = rating.trim() ? Number(rating.replace(',', '.')) : undefined;
+      const priceValue = totalPrice.trim() ? Number(totalPrice.replace(',', '.')) : undefined;
       await apiFetch(`/trips/${tripId}/accommodation`, {
         method: 'PUT',
         body: {
@@ -263,6 +278,8 @@ function AccommodationPick({
             .split(',')
             .map((a) => a.trim())
             .filter(Boolean),
+          totalPrice: priceValue !== undefined && priceValue >= 0 ? priceValue : undefined,
+          paidBy: priceValue ? paidBy || undefined : undefined,
         },
       });
       setOpen(false);
@@ -321,6 +338,13 @@ function AccommodationPick({
                   );
                 })}
               </div>
+            )}
+            {trip.accommodation_total_price && (
+              <p className="text-callout text-secondary">
+                Gesamtpreis <span className="font-semibold text-label">{formatMoney(Number(trip.accommodation_total_price))}</span>
+                {' · bezahlt von '}
+                {participants.find((p) => p.id === trip.accommodation_paid_by)?.name ?? '–'}
+              </p>
             )}
             <div className="flex flex-wrap items-center gap-4 pt-1">
               {trip.accommodation_url && (
@@ -389,6 +413,27 @@ function AccommodationPick({
               value={amenities}
               onChange={(e) => setAmenities(e.target.value)}
             />
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Input
+              label="Gesamtpreis"
+              optional
+              type="number"
+              inputMode="decimal"
+              min={0}
+              step="0.01"
+              placeholder="in Euro"
+              hint="Fließt als Posten in die Kasse ein"
+              value={totalPrice}
+              onChange={(e) => setTotalPrice(e.target.value)}
+            />
+            <Select label="Bezahlt von" optional value={paidBy} onChange={(e) => setPaidBy(e.target.value)}>
+              {participants.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </Select>
           </div>
           <Textarea label="Notiz" optional rows={2} maxLength={500} value={note} onChange={(e) => setNote(e.target.value)} />
           <div className="flex justify-end gap-3">

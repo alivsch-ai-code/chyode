@@ -36,10 +36,11 @@ export async function listGroceryItems(req: Request, res: Response) {
   if (req.participant!.tripId !== tripId) throw forbidden();
 
   const result = await query(
-    `SELECT g.*, tu.name AS added_by_name, checker.name AS checked_by_name
+    `SELECT g.*, tu.name AS added_by_name, checker.name AS checked_by_name, claimer.name AS claimed_by_name
      FROM grocery_items g
      JOIN trip_users tu ON tu.id = g.trip_user_id
      LEFT JOIN trip_users checker ON checker.id = g.checked_by
+     LEFT JOIN trip_users claimer ON claimer.id = g.claimed_by
      WHERE g.trip_id = $1
      ORDER BY (g.checked_at IS NOT NULL), g.created_at ASC`,
     [tripId]
@@ -99,6 +100,36 @@ export async function toggleGroceryItem(req: Request, res: Response) {
          checked_by = CASE WHEN $3 THEN $4::uuid ELSE NULL END
      WHERE id = $1 AND trip_id = $2 RETURNING *`,
     [itemId, tripId, nowChecked, req.participant!.id]
+  );
+  res.json({ item: result.rows[0] });
+}
+
+/**
+ * PATCH /api/trips/:tripId/groceries/:itemId/claim — "Ich kaufe das": beansprucht einen offenen
+ * Artikel (Wunschliste) bzw. gibt die eigene Beanspruchung wieder frei. Nur ein Mitglied gleichzeitig.
+ */
+export async function toggleClaim(req: Request, res: Response) {
+  const { tripId, itemId } = req.params;
+  if (req.participant!.tripId !== tripId) throw forbidden();
+  if (!isUuid(itemId)) throw notFound('Eintrag nicht gefunden');
+
+  const existing = await query<{ claimed_by: string | null }>(
+    'SELECT claimed_by FROM grocery_items WHERE id = $1 AND trip_id = $2',
+    [itemId, tripId]
+  );
+  if (!existing.rows[0]) throw notFound('Eintrag nicht gefunden');
+
+  const claimedByMe = existing.rows[0].claimed_by === req.participant!.id;
+  if (existing.rows[0].claimed_by && !claimedByMe) {
+    throw forbidden('Dieser Artikel ist schon von jemand anderem beansprucht');
+  }
+
+  const result = await query<GroceryItem>(
+    `UPDATE grocery_items
+     SET claimed_by = CASE WHEN $3 THEN NULL ELSE $4::uuid END,
+         claimed_at = CASE WHEN $3 THEN NULL ELSE now() END
+     WHERE id = $1 AND trip_id = $2 RETURNING *`,
+    [itemId, tripId, claimedByMe, req.participant!.id]
   );
   res.json({ item: result.rows[0] });
 }

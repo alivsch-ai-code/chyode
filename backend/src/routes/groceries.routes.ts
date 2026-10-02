@@ -6,6 +6,7 @@ import {
   listGroceryItems,
   getGrocerySummary,
   toggleGroceryItem,
+  toggleClaim,
   deleteGroceryItem,
 } from '../controllers/groceries.controller';
 
@@ -16,6 +17,7 @@ router.post('/', asyncHandler(addGroceryItem));
 router.get('/', asyncHandler(listGroceryItems));
 router.get('/summary', asyncHandler(getGrocerySummary));
 router.patch('/:itemId/toggle', asyncHandler(toggleGroceryItem));
+router.patch('/:itemId/claim', asyncHandler(toggleClaim));
 router.delete('/:itemId', asyncHandler(deleteGroceryItem));
 
 export default router;

@@ -17,6 +17,9 @@ import resultsRoutes from './routes/results.routes';
 import accommodationsRoutes from './routes/accommodations.routes';
 import groceriesRoutes from './routes/groceries.routes';
 import activitiesRoutes from './routes/activities.routes';
+import expensesRoutes from './routes/expenses.routes';
+import settlementsRoutes from './routes/settlements.routes';
+import ledgerRoutes from './routes/ledger.routes';
 
 export function createApp() {
   const app = express();
@@ -50,6 +53,9 @@ export function createApp() {
   app.use('/api/trips/:tripId/accommodations', accommodationsRoutes);
   app.use('/api/trips/:tripId/groceries', groceriesRoutes);
   app.use('/api/trips/:tripId/activities', activitiesRoutes);
+  app.use('/api/trips/:tripId/expenses', expensesRoutes);
+  app.use('/api/trips/:tripId/settlements', settlementsRoutes);
+  app.use('/api/trips/:tripId/balances', ledgerRoutes);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

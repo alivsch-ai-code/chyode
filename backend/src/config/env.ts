@@ -45,6 +45,11 @@ export const env = {
   registrationHourlyLimit: parseInt(process.env.REGISTRATION_HOURLY_LIMIT ?? '30', 10),
   cookieSecure: frontendUrl.startsWith('https://'),
 
+  // Ablage für eingescannte Belege (Finanzbeleg je Ausgabe); wird nie öffentlich/statisch ausgeliefert,
+  // sondern nur über eine authentifizierte, trip-gebundene Route gestreamt.
+  uploadDir: process.env.UPLOAD_DIR ?? './uploads',
+  maxReceiptSizeMb: parseInt(process.env.MAX_RECEIPT_SIZE_MB ?? '8', 10),
+
   rapidApiKey: process.env.RAPIDAPI_KEY ?? '',
   bookingRapidApiHost: process.env.BOOKING_RAPIDAPI_HOST ?? 'booking-com.p.rapidapi.com',
   airbnbRapidApiHost: process.env.AIRBNB_RAPIDAPI_HOST ?? 'airbnb13.p.rapidapi.com',

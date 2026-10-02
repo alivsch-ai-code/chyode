@@ -13,7 +13,9 @@ export function RetentionSummary() {
     <ul className="list-disc space-y-1.5 pl-5">
       <li>
         <strong className="font-semibold text-label">Reisedaten</strong> (Termine, Stimmen, Präferenzen, Notizen,
-        Teilnahmen): automatisch {pluralize(finished, 'Tag', 'Tage')} nach dem Beenden der Abstimmung, spätestens{' '}
+        Teilnahmen, Einkaufsliste, Aktivitäten, Ausgaben und eingescannte Belege): automatisch{' '}
+        {pluralize(finished, 'Tag', 'Tage')} nach dem Beenden der Abstimmung bzw. nach dem tatsächlichen Ende der
+        Reise – oder sofort, sobald alle Schulden in der Kasse beglichen sind. Spätestens{' '}
         {pluralize(maxAge, 'Tag', 'Tage')} nach dem Erstellen der Reise. Der Ersteller kann eine Reise jederzeit sofort
         löschen.
       </li>
@@ -26,8 +28,9 @@ export function RetentionSummary() {
         24 Stunden bis 7 Tagen und werden kurz danach gelöscht.
       </li>
       <li>
-        <strong className="font-semibold text-label">Datensicherungen</strong>: Es gibt tägliche Sicherungen der Datenbank, die
-        7 Tage aufbewahrt werden. Gelöschte Daten verschwinden daher spätestens nach 7 Tagen auch aus den Sicherungen.
+        <strong className="font-semibold text-label">Datensicherungen</strong>: Die Datenbank wird regelmäßig gesichert;
+        Sicherungen werden 7 Tage aufbewahrt. Gelöschte Daten verschwinden daher spätestens nach 7 Tagen auch aus den
+        Sicherungen.
       </li>
     </ul>
   );

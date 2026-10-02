@@ -287,16 +287,28 @@ const accommodationPickSchema = z.object({
   note: z.string().trim().max(500).optional(),
   rating: z.number().min(0).max(5).optional(),
   amenities: z.array(z.string().trim().min(1).max(60)).max(20).optional(),
+  totalPrice: z.number().min(0).max(1000000).optional(),
+  paidBy: z.string().trim().optional(), // trip_user_id; wer die Unterkunft vorgestreckt hat
 });
 
-/** PUT /api/trips/:tripId/accommodation — trägt die fest ausgewählte Unterkunft ein (nur Ersteller). */
+/**
+ * PUT /api/trips/:tripId/accommodation — trägt die fest ausgewählte Unterkunft ein (nur Ersteller).
+ * Mit `totalPrice` + `paidBy` fließt die Unterkunft automatisch als Posten in die Abrechnung ein.
+ */
 export async function setAccommodationPick(req: Request, res: Response) {
   const { tripId } = req.params;
   if (req.participant!.tripId !== tripId) throw forbidden();
 
   const parsed = accommodationPickSchema.safeParse(req.body);
   if (!parsed.success) throw badRequest(parsed.error.issues[0].message);
-  const { title, address, url, imageUrl, note, rating, amenities } = parsed.data;
+  const { title, address, url, imageUrl, note, rating, amenities, totalPrice, paidBy } = parsed.data;
+
+  let paidByTripUserId = req.participant!.id;
+  if (paidBy) {
+    const member = await query('SELECT 1 FROM trip_users WHERE id = $1 AND trip_id = $2', [paidBy, tripId]);
+    if (!member.rows[0]) throw badRequest('Unbekanntes Mitglied als Zahler angegeben');
+    paidByTripUserId = paidBy;
+  }
 
   const result = await query<Trip>(
     `UPDATE trips SET
@@ -308,7 +320,9 @@ export async function setAccommodationPick(req: Request, res: Response) {
        accommodation_rating = $7,
        accommodation_amenities = $8,
        accommodation_picked_by = $9,
-       accommodation_picked_at = now()
+       accommodation_picked_at = now(),
+       accommodation_total_price = $10,
+       accommodation_paid_by = $11
      WHERE id = $1 RETURNING *`,
     [
       tripId,
@@ -320,6 +334,8 @@ export async function setAccommodationPick(req: Request, res: Response) {
       rating ?? null,
       amenities ?? [],
       req.participant!.id,
+      totalPrice ?? null,
+      totalPrice ? paidByTripUserId : null,
     ]
   );
   if (!result.rows[0]) throw notFound('Trip nicht gefunden');
@@ -335,7 +351,8 @@ export async function clearAccommodationPick(req: Request, res: Response) {
     `UPDATE trips SET
        accommodation_title = NULL, accommodation_address = NULL, accommodation_url = NULL,
        accommodation_image_url = NULL, accommodation_note = NULL, accommodation_rating = NULL,
-       accommodation_amenities = '{}', accommodation_picked_by = NULL, accommodation_picked_at = NULL
+       accommodation_amenities = '{}', accommodation_picked_by = NULL, accommodation_picked_at = NULL,
+       accommodation_total_price = NULL, accommodation_paid_by = NULL
      WHERE id = $1 RETURNING id`,
     [tripId]
   );

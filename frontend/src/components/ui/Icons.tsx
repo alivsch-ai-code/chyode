@@ -291,3 +291,18 @@ export const IconEyeLock = createIcon(
   </>,
   'IconEyeLock'
 );
+export const IconReceipt = createIcon(
+  <>
+    <path d="M6 3h12v17l-2-1.3-2 1.3-2-1.3-2 1.3-2-1.3-2 1.3V3Z" />
+    <path d="M8.5 8h7M8.5 11.5h7M8.5 15h4" />
+  </>,
+  'IconReceipt'
+);
+export const IconScale = createIcon(
+  <>
+    <path d="M12 3v15M8 18h8" />
+    <path d="M5 7h5M14 7h5" />
+    <path d="M5 7 2.5 12a2.5 2.5 0 0 0 5 0L5 7ZM19 7l-2.5 5a2.5 2.5 0 0 0 5 0L19 7Z" />
+  </>,
+  'IconScale'
+);

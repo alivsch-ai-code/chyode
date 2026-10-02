@@ -1,4 +1,5 @@
 import { ErrorRequestHandler, RequestHandler } from 'express';
+import { MulterError } from 'multer';
 import { HttpError } from '../utils/httpError';
 
 export const errorHandler: ErrorRequestHandler = (err, req, res, _next) => {
@@ -12,6 +13,12 @@ export const errorHandler: ErrorRequestHandler = (err, req, res, _next) => {
   }
   if (err?.type === 'entity.too.large') {
     return res.status(413).json({ error: 'Die Anfrage ist zu groß' });
+  }
+
+  // Beleg-Upload (multer): zu groß oder falscher Dateityp
+  if (err instanceof MulterError) {
+    const message = err.code === 'LIMIT_FILE_SIZE' ? 'Der Beleg ist zu groß' : 'Beleg konnte nicht hochgeladen werden';
+    return res.status(400).json({ error: message });
   }
 
   console.error('Unhandled error:', err);

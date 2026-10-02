@@ -110,6 +110,8 @@ CREATE TABLE IF NOT EXISTS trips (
   accommodation_amenities TEXT[] NOT NULL DEFAULT '{}',
   accommodation_picked_by UUID,                -- verweist auf trip_users(id); FK folgt unten (trip_users existiert erst danach)
   accommodation_picked_at TIMESTAMPTZ,
+  accommodation_total_price NUMERIC(10, 2) CHECK (accommodation_total_price >= 0),  -- fließt als Posten in die Abrechnung ein
+  accommodation_paid_by   UUID,                -- verweist auf trip_users(id); wer die Unterkunft vorgestreckt hat
   created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at          TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -135,9 +137,11 @@ CREATE TABLE IF NOT EXISTS trip_users (
 CREATE INDEX IF NOT EXISTS idx_trip_users_trip_id ON trip_users(trip_id);
 CREATE INDEX IF NOT EXISTS idx_trip_users_session_token ON trip_users(session_token);
 
--- trips.accommodation_picked_by verweist erst jetzt auf trip_users, da die Tabelle vorher noch nicht existierte
+-- trips.accommodation_picked_by/-paid_by verweisen erst jetzt auf trip_users, da die Tabelle vorher noch nicht existierte
 ALTER TABLE trips ADD CONSTRAINT trips_accommodation_picked_by_fkey
   FOREIGN KEY (accommodation_picked_by) REFERENCES trip_users(id) ON DELETE SET NULL;
+ALTER TABLE trips ADD CONSTRAINT trips_accommodation_paid_by_fkey
+  FOREIGN KEY (accommodation_paid_by) REFERENCES trip_users(id) ON DELETE SET NULL;
 
 -- ein Account kann pro Trip nur einmal Teilnehmer sein
 CREATE UNIQUE INDEX IF NOT EXISTS idx_trip_users_trip_user
@@ -220,6 +224,8 @@ CREATE TABLE IF NOT EXISTS grocery_items (
   price         NUMERIC(10, 2) CHECK (price >= 0),              -- Preis des Artikels, für die Kostenaufteilung
   checked_at    TIMESTAMPTZ,                                    -- gesetzt, sobald jemand es gekauft/abgehakt hat
   checked_by    UUID REFERENCES trip_users(id) ON DELETE SET NULL,
+  claimed_by    UUID REFERENCES trip_users(id) ON DELETE SET NULL,  -- "ich kaufe das" (Wunschliste, vor dem Kauf)
+  claimed_at    TIMESTAMPTZ,
   created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
@@ -243,6 +249,47 @@ CREATE TABLE IF NOT EXISTS trip_activities (
 );
 
 CREATE INDEX IF NOT EXISTS idx_trip_activities_trip_id ON trip_activities(trip_id);
+
+-- ------------------------------------------------------------
+-- trip_expenses: manuelle Ausgaben, unter der Gruppe aufgeteilt (z. B. Taxi, Tickets),
+-- optional mit eingescanntem Beleg (Dateiname, nicht öffentlich erreichbar)
+-- ------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS trip_expenses (
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  trip_id       UUID NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
+  paid_by       UUID NOT NULL REFERENCES trip_users(id) ON DELETE CASCADE,
+  description   TEXT NOT NULL,
+  amount        NUMERIC(10, 2) NOT NULL CHECK (amount > 0),
+  receipt_path  TEXT,
+  created_by    UUID REFERENCES trip_users(id) ON DELETE SET NULL,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_trip_expenses_trip_id ON trip_expenses(trip_id);
+
+-- trip_expense_participants: wer sich an einer Ausgabe beteiligt (zum Erfassungszeitpunkt fixiert)
+CREATE TABLE IF NOT EXISTS trip_expense_participants (
+  expense_id    UUID NOT NULL REFERENCES trip_expenses(id) ON DELETE CASCADE,
+  trip_user_id  UUID NOT NULL REFERENCES trip_users(id) ON DELETE CASCADE,
+  PRIMARY KEY (expense_id, trip_user_id)
+);
+
+-- ------------------------------------------------------------
+-- trip_settlements: manuelle Zahlung zwischen zwei Mitgliedern, gleicht Schulden aus
+-- ------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS trip_settlements (
+  id                 UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  trip_id            UUID NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
+  from_trip_user_id  UUID NOT NULL REFERENCES trip_users(id) ON DELETE CASCADE,
+  to_trip_user_id    UUID NOT NULL REFERENCES trip_users(id) ON DELETE CASCADE,
+  amount             NUMERIC(10, 2) NOT NULL CHECK (amount > 0),
+  note               TEXT,
+  created_by         UUID REFERENCES trip_users(id) ON DELETE SET NULL,
+  created_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CHECK (from_trip_user_id <> to_trip_user_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_trip_settlements_trip_id ON trip_settlements(trip_id);
 
 -- ------------------------------------------------------------
 -- search_results_cache: gecachte Ergebnisse externer Booking-APIs

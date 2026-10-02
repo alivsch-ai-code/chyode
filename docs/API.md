@@ -352,11 +352,14 @@ Tab „Unterkünfte“, auch bevor das Ergebnis freigegeben ist.
   "imageUrl": "https://…",
   "note": "Check-in Freitag ab 16 Uhr, Check-out Sonntag bis 10 Uhr.",
   "rating": 4.9,
-  "amenities": ["Sauna", "Kamin", "Ski-in/Ski-out"]
+  "amenities": ["Sauna", "Kamin", "Ski-in/Ski-out"],
+  "totalPrice": 980,
+  "paidBy": "…"
 }
 ```
 Alle Felder außer `title` sind optional. `url`/`imageUrl` müssen, wenn gesetzt, mit `https://`
-beginnen.
+beginnen. Mit `totalPrice` (+ optional `paidBy`, Standard: wer den Eintrag speichert) fließt die
+Unterkunft automatisch als Posten in die Kasse ein (siehe unten).
 
 ---
 
@@ -391,6 +394,10 @@ zahlt, was sie selbst eingetragen hat“.
 ### `PATCH /trips/:tripId/groceries/:itemId/toggle`
 Hakt einen Artikel ab bzw. macht das rückgängig (jedes Mitglied).
 
+### `PATCH /trips/:tripId/groceries/:itemId/claim`
+„Ich kaufe das“ – beansprucht einen offenen Artikel (Wunschliste) bzw. gibt die eigene
+Beanspruchung wieder frei. Ist er schon von jemand anderem beansprucht → `403`.
+
 ### `DELETE /trips/:tripId/groceries/:itemId`
 Ersteller entfernt jeden Eintrag, alle anderen nur ihre eigenen.
 
@@ -421,3 +428,55 @@ Alle Aktivitäten, nächstgelegene zuerst, inkl. `added_by_name`.
 
 ### `DELETE /trips/:tripId/activities/:activityId`
 Ersteller entfernt jede Aktivität, alle anderen nur ihre eigenen.
+
+---
+
+## Ausgaben, Zahlungen und Kasse
+
+Eine einfache Abrechnung: wer wem wie viel schuldet, wird live aus drei Quellen berechnet statt
+gespeichert (daher nie veraltet) – abgehakte Einkaufslisten-Artikel mit Preis, die
+Unterkunftskosten (siehe `PUT /trips/:tripId/accommodation`) und manuelle Ausgaben. Zahlungen
+gleichen das wieder aus.
+
+### `POST /trips/:tripId/expenses`
+`multipart/form-data` (damit ein Beleg-Foto mitgeschickt werden kann):
+- `description` (Pflicht), `amount` (Pflicht, > 0)
+- `paidBy` optional (trip_user_id; Standard: wer den Eintrag anlegt)
+- `receipt` optional: JPG, PNG, WEBP oder PDF, max. 8 MB (konfigurierbar über `MAX_RECEIPT_SIZE_MB`)
+
+Wird gleichmäßig unter allen aktuellen Mitgliedern aufgeteilt.
+
+### `GET /trips/:tripId/expenses`
+Alle Ausgaben, neueste zuerst, inkl. `paid_by_name` und `hasReceipt` (der Dateiname selbst wird
+nie an den Client geschickt).
+
+### `GET /trips/:tripId/expenses/:expenseId/receipt`
+Liefert das eingescannte Beleg-Bild/PDF (nur Mitglieder des Trips).
+
+### `DELETE /trips/:tripId/expenses/:expenseId`
+Ersteller oder Beteiligte (Zahler/Anlegende) entfernen eine Ausgabe – der Beleg wird mitgelöscht.
+
+### `POST /trips/:tripId/settlements`
+Trägt eine manuelle Zahlung ein (gleicht Schulden aus):
+```json
+{ "toTripUserId": "…", "amount": 25, "note": "bar beim Frühstück" }
+```
+
+### `GET /trips/:tripId/settlements`
+Alle eingetragenen Zahlungen, neueste zuerst.
+
+### `DELETE /trips/:tripId/settlements/:settlementId`
+Ersteller oder eine der beiden beteiligten Personen.
+
+### `GET /trips/:tripId/balances`
+```json
+{
+  "balances": [{ "tripUserId": "…", "name": "Mara", "balance": 42.5 }],
+  "suggestions": [{ "fromTripUserId": "…", "fromName": "Tom", "toTripUserId": "…", "toName": "Mara", "amount": 42.5 }],
+  "totalExpenses": 390,
+  "settled": false
+}
+```
+`balance` ist positiv, wenn die Person Geld vorgestreckt hat (bekommt noch etwas), negativ, wenn
+sie noch etwas schuldet. `suggestions` ist ein Vorschlag mit möglichst wenigen Transaktionen, um
+alle Salden auszugleichen. `settled` ist die Grundlage für die automatische Löschung (siehe unten).

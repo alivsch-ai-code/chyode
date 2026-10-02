@@ -8,6 +8,7 @@ import { ActivitiesTab } from '@/components/trip/ActivitiesTab';
 import { DatesTab } from '@/components/trip/DatesTab';
 import { GroceryTab } from '@/components/trip/GroceryTab';
 import { IdeasTab } from '@/components/trip/IdeasTab';
+import { LedgerTab } from '@/components/trip/LedgerTab';
 import { NotesTab } from '@/components/trip/NotesTab';
 import { OverviewTab } from '@/components/trip/OverviewTab';
 import { PreferencesTab } from '@/components/trip/PreferencesTab';
@@ -22,6 +23,7 @@ import {
   IconMapPin,
   IconMountain,
   IconNote,
+  IconReceipt,
   IconSparkles,
   IconTrophy,
   IconUsers,
@@ -32,7 +34,7 @@ import { ApiError, errorMessage } from '@/lib/api';
 import { useRequireAuth } from '@/lib/auth';
 import { TRIP_STATUS_LABELS } from '@/lib/format';
 
-type TabId = 'overview' | 'dates' | 'prefs' | 'notes' | 'results' | 'stays' | 'food' | 'activities' | 'ideas';
+type TabId = 'overview' | 'dates' | 'prefs' | 'notes' | 'results' | 'stays' | 'food' | 'activities' | 'ledger' | 'ideas';
 
 const VOTING_TABS: TabItem<TabId>[] = [
   { value: 'overview', label: 'Übersicht', icon: <IconUsers size={17} /> },
@@ -43,16 +45,18 @@ const VOTING_TABS: TabItem<TabId>[] = [
   { value: 'stays', label: 'Unterkünfte', icon: <IconBed size={17} /> },
   { value: 'food', label: 'Essen', icon: <IconUtensils size={17} /> },
   { value: 'activities', label: 'Aktivitäten', icon: <IconCompass size={17} /> },
+  { value: 'ledger', label: 'Kasse', icon: <IconReceipt size={17} /> },
   { value: 'ideas', label: 'Ideen', icon: <IconMountain size={17} /> },
 ];
 
 // Im Planungsmodus (schon gebucht) treten Termine/Präferenzen/Ergebnis in den Hintergrund;
-// Unterkunft, Essen und Aktivitäten stehen vorne.
+// Unterkunft, Essen, Aktivitäten und Kasse stehen vorne.
 const PLANNING_TABS: TabItem<TabId>[] = [
   { value: 'overview', label: 'Übersicht', icon: <IconUsers size={17} /> },
   { value: 'stays', label: 'Unterkünfte', icon: <IconBed size={17} /> },
   { value: 'food', label: 'Essen', icon: <IconUtensils size={17} /> },
   { value: 'activities', label: 'Aktivitäten', icon: <IconCompass size={17} /> },
+  { value: 'ledger', label: 'Kasse', icon: <IconReceipt size={17} /> },
   { value: 'notes', label: 'Notizen', icon: <IconNote size={17} /> },
   { value: 'ideas', label: 'Ideen', icon: <IconMountain size={17} /> },
 ];
@@ -171,11 +175,15 @@ export default function TripPage({ params }: { params: { tripId: string } }) {
             trip={trip}
             isCreator={isCreator}
             canSeeResults={canSeeResults}
+            participants={participants}
             onTripChanged={() => mutate()}
           />
         )}
         {tab === 'food' && <GroceryTab tripId={trip.id} myParticipantId={myParticipantId} />}
         {tab === 'activities' && <ActivitiesTab tripId={trip.id} myParticipantId={myParticipantId} />}
+        {tab === 'ledger' && (
+          <LedgerTab tripId={trip.id} trip={trip} myParticipantId={myParticipantId} participants={participants} />
+        )}
         {tab === 'ideas' && <IdeasTab tripId={trip.id} canSeeResults={canSeeResults} />}
       </div>
     </div>

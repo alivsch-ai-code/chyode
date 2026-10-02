@@ -75,6 +75,8 @@ export interface Trip {
   accommodation_amenities: string[];
   accommodation_picked_by: string | null;
   accommodation_picked_at: string | null;
+  accommodation_total_price: string | null;
+  accommodation_paid_by: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -90,6 +92,30 @@ export interface GroceryItem {
   price: string | null;
   checked_at: string | null;
   checked_by: string | null;
+  claimed_by: string | null;
+  claimed_at: string | null;
+  created_at: string;
+}
+
+export interface TripExpense {
+  id: string;
+  trip_id: string;
+  paid_by: string;
+  description: string;
+  amount: string;
+  receipt_path: string | null;
+  created_by: string | null;
+  created_at: string;
+}
+
+export interface TripSettlement {
+  id: string;
+  trip_id: string;
+  from_trip_user_id: string;
+  to_trip_user_id: string;
+  amount: string;
+  note: string | null;
+  created_by: string | null;
   created_at: string;
 }
 

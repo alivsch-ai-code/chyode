@@ -49,6 +49,10 @@ services:
       BOOKING_RAPIDAPI_HOST: ${BOOKING_RAPIDAPI_HOST:-booking-com.p.rapidapi.com}
       AIRBNB_RAPIDAPI_HOST: ${AIRBNB_RAPIDAPI_HOST:-airbnb13.p.rapidapi.com}
       GOOGLE_MAPS_API_KEY: ${GOOGLE_MAPS_API_KEY:-}
+      UPLOAD_DIR: /app/uploads
+      MAX_RECEIPT_SIZE_MB: ${MAX_RECEIPT_SIZE_MB:-8}
+    volumes:
+      - uploads_data:/app/uploads
     ports:
       - '127.0.0.1:4000:4000'
 
@@ -66,3 +70,4 @@ services:
 
 volumes:
   db_data:
+  uploads_data:

@@ -50,6 +50,8 @@ export interface Trip {
   accommodation_amenities: string[];
   accommodation_picked_by: string | null;
   accommodation_picked_at: string | null;
+  accommodation_total_price: string | null;
+  accommodation_paid_by: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -65,9 +67,12 @@ export interface GroceryItem {
   price: string | null;
   checked_at: string | null;
   checked_by: string | null;
+  claimed_by: string | null;
+  claimed_at: string | null;
   created_at: string;
   added_by_name?: string;
   checked_by_name?: string | null;
+  claimed_by_name?: string | null;
 }
 
 export interface GrocerySummary {
@@ -99,6 +104,53 @@ export interface TripUser {
   email: string | null;
   role: ParticipantRole;
   joined_at: string;
+}
+
+export interface TripExpense {
+  id: string;
+  trip_id: string;
+  paid_by: string;
+  description: string;
+  amount: string;
+  created_by: string | null;
+  created_at: string;
+  paid_by_name?: string;
+  hasReceipt: boolean;
+}
+
+export interface TripSettlement {
+  id: string;
+  trip_id: string;
+  from_trip_user_id: string;
+  to_trip_user_id: string;
+  amount: string;
+  note: string | null;
+  created_by: string | null;
+  created_at: string;
+  from_name?: string;
+  to_name?: string;
+}
+
+export interface LedgerBalance {
+  tripUserId: string;
+  name: string;
+  /** positiv = hat Geld vorgestreckt; negativ = schuldet noch */
+  balance: number;
+}
+
+export interface SettlementSuggestion {
+  fromTripUserId: string;
+  fromName: string;
+  toTripUserId: string;
+  toName: string;
+  amount: number;
+}
+
+export interface LedgerSummary {
+  balances: LedgerBalance[];
+  suggestions: SettlementSuggestion[];
+  totalExpenses: number;
+  settled: boolean;
 }
 
 export type UserRole = 'admin' | 'user';

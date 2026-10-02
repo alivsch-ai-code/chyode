@@ -1,4 +1,4 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api';
+export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api';
 
 export class ApiError extends Error {
   status: number;
@@ -14,19 +14,23 @@ export const UNAUTHORIZED_EVENT = 'tp:unauthorized';
 
 interface RequestOptions {
   method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
-  body?: unknown;
+  body?: unknown | FormData;
 }
 
 // Anmelde-Endpunkte liefern bei falschen Daten ebenfalls 401 – das ist dort kein Sitzungsablauf.
 const AUTH_FORM_PATHS = ['/auth/login', '/auth/accept-invite', '/auth/reset-password', '/auth/change-password'];
 
 export async function apiFetch<T>(path: string, options: RequestOptions = {}): Promise<T> {
+  // FormData (z. B. Beleg-Upload) wird unverändert gesendet – der Browser setzt Content-Type
+  // inkl. Multipart-Boundary selbst; alles andere geht weiterhin als JSON.
+  const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData;
+
   let response: Response;
   try {
     response = await fetch(`${API_URL}${path}`, {
       method: options.method ?? 'GET',
-      headers: options.body !== undefined ? { 'Content-Type': 'application/json' } : undefined,
-      body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
+      headers: options.body !== undefined && !isFormData ? { 'Content-Type': 'application/json' } : undefined,
+      body: options.body !== undefined ? (isFormData ? (options.body as FormData) : JSON.stringify(options.body)) : undefined,
       credentials: 'include',
     });
   } catch {

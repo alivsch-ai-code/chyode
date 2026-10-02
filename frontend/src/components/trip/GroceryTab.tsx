@@ -112,6 +112,23 @@ export function GroceryTab({ tripId, myParticipantId }: { tripId: string; myPart
     }
   }
 
+  async function claim(entry: GroceryItem) {
+    setBusyId(entry.id);
+    try {
+      await mutate(
+        async (current) => {
+          const updated = await apiFetch<{ item: GroceryItem }>(`${key}/${entry.id}/claim`, { method: 'PATCH' });
+          return { items: (current?.items ?? []).map((i) => (i.id === entry.id ? updated.item : i)) };
+        },
+        { revalidate: false }
+      );
+    } catch (err) {
+      toast(errorMessage(err), 'error');
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   const items = data?.items ?? [];
   const hasPrices = items.some((i) => i.price !== null);
 
@@ -281,6 +298,7 @@ export function GroceryTab({ tripId, myParticipantId }: { tripId: string; myPart
             myParticipantId={myParticipantId}
             busyId={busyId}
             onToggle={toggle}
+            onClaim={claim}
             onDelete={remove}
           />
         ))}
@@ -295,6 +313,7 @@ function GroceryGroup({
   myParticipantId,
   busyId,
   onToggle,
+  onClaim,
   onDelete,
 }: {
   groupKey: GroupKey;
@@ -302,6 +321,7 @@ function GroceryGroup({
   myParticipantId: string;
   busyId: string | null;
   onToggle: (entry: GroceryItem) => void;
+  onClaim: (entry: GroceryItem) => void;
   onDelete: (entry: GroceryItem) => void;
 }) {
   const open = items.filter((i) => !i.checked_at);
@@ -323,8 +343,10 @@ function GroceryGroup({
             key={entry.id}
             entry={entry}
             mine={entry.trip_user_id === myParticipantId}
+            myParticipantId={myParticipantId}
             busy={busyId === entry.id}
             onToggle={() => onToggle(entry)}
+            onClaim={() => onClaim(entry)}
             onDelete={() => onDelete(entry)}
           />
         ))}
@@ -336,14 +358,18 @@ function GroceryGroup({
 function GroceryRow({
   entry,
   mine,
+  myParticipantId,
   busy,
   onToggle,
+  onClaim,
   onDelete,
 }: {
   entry: GroceryItem;
   mine: boolean;
+  myParticipantId: string;
   busy: boolean;
   onToggle: () => void;
+  onClaim: () => void;
   onDelete: () => void;
 }) {
   const checked = Boolean(entry.checked_at);
@@ -372,6 +398,30 @@ function GroceryRow({
           {checked && entry.checked_by_name && <span> · besorgt von {entry.checked_by_name}</span>}
         </p>
       </div>
+      {!checked &&
+        (entry.claimed_by ? (
+          <button
+            type="button"
+            onClick={entry.claimed_by === myParticipantId ? onClaim : undefined}
+            disabled={busy || entry.claimed_by !== myParticipantId}
+            className={`shrink-0 rounded-full px-3 py-1 text-footnote font-medium transition ${
+              entry.claimed_by === myParticipantId
+                ? 'bg-accent/15 text-accent hover:bg-accent/25'
+                : 'bg-fill/12 text-secondary'
+            }`}
+          >
+            {entry.claimed_by === myParticipantId ? 'Du kaufst das' : `${entry.claimed_by_name} kauft das`}
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={onClaim}
+            disabled={busy}
+            className="shrink-0 rounded-full bg-fill/12 px-3 py-1 text-footnote font-medium text-label transition hover:bg-fill/20 disabled:opacity-40"
+          >
+            Ich kaufe das
+          </button>
+        ))}
       {entry.price !== null && <Badge tone="neutral">{formatMoney(Number(entry.price))}</Badge>}
       {mine && (
         <button

@@ -35,18 +35,25 @@ abstimmen, Wünsche notieren, Ideen für die Berge entdecken und passende Unterk
    Sobald das Ergebnis freigegeben ist und alle abgestimmt haben, bekommen alle eine E-Mail.
 6. Der Ersteller startet die **Unterkunftssuche** oder trägt die bereits gebuchte Unterkunft fest
    ein (Name, Adresse, Bewertung, Ausstattung, Link) – sichtbar für alle, auch vor der Freigabe.
-7. Vor Ort helfen zwei weitere Tabs: eine gemeinsame **Einkaufsliste** (mit Preis und
-   Kostenaufteilung, gleichmäßig oder nach eigenen Wünschen) und gesammelte **Aktivitäten** in der
-   Nähe (Kategorie, Entfernung, Preis, Link). Ein Tab mit kuratierten **Berg-Ideen** (nach
-   Jahreszeit und Wünschen sortiert, mit Google-Maps-Links) liefert zusätzliche Inspiration.
+7. Vor Ort helfen mehrere Tabs: eine gemeinsame **Einkaufsliste** (gruppiert nach Mahlzeit, mit
+   Wunschliste – „ich kaufe das“), gesammelte **Aktivitäten** in der Nähe (Kategorie, Entfernung,
+   Dauer, Preis, Link) und eine **Kasse**: abgehakte Einkäufe, Unterkunftskosten und manuelle
+   Ausgaben (optional mit eingescanntem Beleg) fließen automatisch zusammen, die App rechnet live
+   aus, wer wem wie viel schuldet, und schlägt die wenigsten nötigen Zahlungen zum Ausgleichen vor.
+   Ein Tab mit kuratierten **Berg-Ideen** (nach Jahreszeit und Wünschen sortiert, mit
+   Google-Maps-Links) liefert zusätzliche Inspiration.
+8. Jede Reise läuft in einem von zwei **Modi**: „Wir stimmen noch ab“ oder „Ist schon gebucht“
+   (Planung) – der Ersteller kann jederzeit wechseln. Im Planungsmodus treten Termine,
+   Präferenzen und Ergebnis in den Hintergrund, Unterkunft/Essen/Aktivitäten/Kasse stehen vorn.
 
 ## Datenschutz
 
 Datensparsam by Design: kein Tracking, kein Zugriffsprotokoll mit IP-Adressen, nur ein technisch
 notwendiger Sitzungs-Cookie. Reisedaten werden automatisch gelöscht (Standard: 7 Tage nach Ende
-der Abstimmung, spätestens 90 Tage nach dem Erstellen); Reise und Konto lassen sich jederzeit
-selbst löschen. Details: Seite `/datenschutz`, Konfiguration: [docs/CONFIGURATION.md](docs/CONFIGURATION.md),
-Tests: [tests/README.md](tests/README.md).
+der Abstimmung bzw. nach dem tatsächlichen Reiseende, oder sofort sobald alle Schulden in der
+Kasse beglichen sind; spätestens 90 Tage nach dem Erstellen); Reise und Konto lassen sich
+jederzeit selbst löschen. Details: Seite `/datenschutz`, Konfiguration:
+[docs/CONFIGURATION.md](docs/CONFIGURATION.md), Tests: [tests/README.md](tests/README.md).
 
 ## Erster Start (Administrator anlegen)
 

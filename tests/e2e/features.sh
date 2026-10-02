@@ -182,6 +182,42 @@ check "Entfernen setzt zurück" 204 "$(jcode DELETE $JC $API/trips/$TID/accommod
 check "  Name danach leer" null "$(curl -s -b $JC $API/trips/$TID | jq -r .trip.accommodation_title)"
 jcode PUT $JC $API/trips/$TID/accommodation '{"title":"Exclusive Alpenlodge Galsterberg"}' >/dev/null
 
+echo "== Wunschliste (Einkaufsliste beanspruchen) =="
+BROT=$(curl -s -b $JC $API/trips/$TID/groceries | jq -r '.items[] | select(.item=="Brot") | .id')
+check "Teilnehmer 1 beansprucht Artikel" true "$(curl -s -b $J1 -X PATCH $API/trips/$TID/groceries/$BROT/claim | jq -r '.item.claimed_at != null')"
+check "Teilnehmer 2 darf nicht ebenfalls beanspruchen" 403 "$(jcode PATCH $J2 $API/trips/$TID/groceries/$BROT/claim)"
+check "Beansprucht von Teilnehmer 1 sichtbar" "E2E Eins" "$(curl -s -b $JC $API/trips/$TID/groceries | jq -r '.items[] | select(.id=="'$BROT'") | .claimed_by_name')"
+check "Teilnehmer 1 gibt Beanspruchung wieder frei" null "$(curl -s -b $J1 -X PATCH $API/trips/$TID/groceries/$BROT/claim | jq -r '.item.claimed_at')"
+
+echo "== Ausgaben, Zahlungen und Kasse =="
+JC_PID=$(curl -s -b $JC $API/trips/$TID | jq -r .myParticipantId)
+J1_PID=$(curl -s -b $J1 $API/trips/$TID | jq -r .myParticipantId)
+J2_PID=$(curl -s -b $J2 $API/trips/$TID | jq -r .myParticipantId)
+check "Nicht-Mitglied sieht Kasse nicht" 403 "$(jcode GET $J3 $API/trips/$TID/balances)"
+check "Unterkunft mit Preis gespeichert" 300 "$(curl -s -b $JC -X PUT -H 'Content-Type: application/json' -d "{\"title\":\"Exclusive Alpenlodge Galsterberg\",\"totalPrice\":300,\"paidBy\":\"$JC_PID\"}" $API/trips/$TID/accommodation | jq -r .trip.accommodation_total_price)"
+check "Unterkunft fließt in die Kasse ein (3-Wege-Split)" 200 "$(curl -s -b $J1 $API/trips/$TID/balances | jq -r '.balances[] | select(.tripUserId=="'$JC_PID'") | .balance')"
+echo 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=' | base64 -d > /tmp/receipt.png
+EXP=$(curl -s -b $J1 -F 'description=Taxi' -F 'amount=90' -F 'receipt=@/tmp/receipt.png;type=image/png' $API/trips/$TID/expenses)
+check "Ausgabe mit Beleg angelegt" true "$(echo "$EXP" | jq -r .expense.hasReceipt)"
+EXPID=$(echo "$EXP" | jq -r .expense.id)
+check "Beleg ist abrufbar" 200 "$(code -b $J1 $API/trips/$TID/expenses/$EXPID/receipt)"
+check "Nicht-Mitglied darf Beleg nicht sehen" 403 "$(jcode GET $J3 $API/trips/$TID/expenses/$EXPID/receipt)"
+check "Negativer Betrag abgelehnt" 400 "$(jcode POST $J1 $API/trips/$TID/expenses '{"description":"X","amount":-5}')"
+check "Kasse: 390 Euro insgesamt" 390 "$(curl -s -b $JC $API/trips/$TID/balances | jq -r .totalExpenses)"
+check "Kasse: Ersteller bekommt 170" 170 "$(curl -s -b $JC $API/trips/$TID/balances | jq -r '.balances[] | select(.tripUserId=="'$JC_PID'") | .balance')"
+check "Kasse: Teilnehmer 2 schuldet 130" -130 "$(curl -s -b $JC $API/trips/$TID/balances | jq -r '.balances[] | select(.tripUserId=="'$J2_PID'") | .balance')"
+check "Zwei Vorschläge zum Ausgleichen" 2 "$(curl -s -b $JC $API/trips/$TID/balances | jq '.suggestions | length')"
+check "Fremde Ausgabe löschen verboten" 403 "$(jcode DELETE $J2 $API/trips/$TID/expenses/$EXPID)"
+check "Zahlung an sich selbst abgelehnt" 400 "$(jcode POST $J1 $API/trips/$TID/settlements "{\"toTripUserId\":\"$J1_PID\",\"amount\":10}")"
+check "Teilnehmer 2 begleicht 130 bei Ersteller" 201 "$(jcode POST $J2 $API/trips/$TID/settlements "{\"toTripUserId\":\"$JC_PID\",\"amount\":130,\"note\":\"bar\"}")"
+check "Teilnehmer 2 danach ausgeglichen" 0 "$(curl -s -b $JC $API/trips/$TID/balances | jq -r '.balances[] | select(.tripUserId=="'$J2_PID'") | .balance')"
+check "Noch nicht alles beglichen" false "$(curl -s -b $JC $API/trips/$TID/balances | jq -r .settled)"
+check "Teilnehmer 1 begleicht restliche 40" 201 "$(jcode POST $J1 $API/trips/$TID/settlements "{\"toTripUserId\":\"$JC_PID\",\"amount\":40}")"
+check "Jetzt alles beglichen" true "$(curl -s -b $JC $API/trips/$TID/balances | jq -r .settled)"
+check "Eigene Ausgabe löschen erlaubt" 204 "$(jcode DELETE $J1 $API/trips/$TID/expenses/$EXPID)"
+check "Unterkunftspreis wieder entfernen" 204 "$(jcode DELETE $JC $API/trips/$TID/accommodation)"
+jcode PUT $JC $API/trips/$TID/accommodation '{"title":"Exclusive Alpenlodge Galsterberg"}' >/dev/null
+
 echo "== Abstimmung beenden =="
 check "Ersteller beendet die Abstimmung" closed "$(curl -s -b $JC -X POST $API/trips/$TID/close-voting | jq -r .trip.status)"
 check "Löschfrist startet (voting_closed_at gesetzt)" 1 "$($PSQL -c "select count(*) from trips where id='$TID' and voting_closed_at is not null")"
@@ -195,11 +231,40 @@ echo "== Automatische Löschung =="
 STALE=$(jpost $J1 $API/trips '{"title":"Alt","location":"X","dateOptions":[{"label":"a","startDate":"2026-11-06","endDate":"2026-11-08"}]}' | jq -r .trip.id)
 $PSQL -c "update trips set created_at = now() - interval '95 days' where id='$STALE'" >/dev/null
 $PSQL -c "update trips set voting_closed_at = now() - interval '8 days' where id='$TID'" >/dev/null
+
+# Reise real beendet (end_date erreicht, z. B. Planungsmodus) statt per Abstimmung geschlossen
+D10AGO=$(date -d '-10 days' +%Y-%m-%d); D8AGO=$(date -d '-8 days' +%Y-%m-%d)
+D2AGO=$(date -d '-2 days' +%Y-%m-%d); D1AGO=$(date -d '-1 days' +%Y-%m-%d)
+ENDED=$(jpost $J1 $API/trips "{\"title\":\"Beendet\",\"location\":\"X\",\"mode\":\"planning\",\"dateMode\":\"fixed\",\"startDate\":\"$D10AGO\",\"endDate\":\"$D8AGO\"}" | jq -r .trip.id)
+
+# Innerhalb der Frist, aber alle Schulden schon beglichen -> sofort löschen statt zu warten
+SETTLED=$(jpost $J1 $API/trips "{\"title\":\"Beglichen\",\"location\":\"X\",\"mode\":\"planning\",\"dateMode\":\"fixed\",\"startDate\":\"$D2AGO\",\"endDate\":\"$D1AGO\"}" | jq -r .trip.id)
+IT_S=$(curl -s -b $J1 $API/trips/$SETTLED | jq -r .trip.invite_token)
+jcode POST $J2 $API/trips/invite/$IT_S/join >/dev/null
+jpost $J1 $API/trips/$SETTLED/expenses '{"description":"Hütte","amount":50}' >/dev/null
+J2_SETTLED_PID=$(curl -s -b $J2 $API/trips/$SETTLED | jq -r .myParticipantId)
+J1_SETTLED_PID=$(curl -s -b $J1 $API/trips/$SETTLED | jq -r .myParticipantId)
+jpost $J2 $API/trips/$SETTLED/settlements "{\"toTripUserId\":\"$J1_SETTLED_PID\",\"amount\":25}" >/dev/null
+check "Testreise ist schon ausgeglichen" true "$(curl -s -b $J1 $API/trips/$SETTLED/balances | jq -r .settled)"
+
+# Innerhalb der Frist und noch offene Schulden -> darf noch nicht gelöscht werden
+UNSETTLED=$(jpost $J1 $API/trips "{\"title\":\"Offen\",\"location\":\"X\",\"mode\":\"planning\",\"dateMode\":\"fixed\",\"startDate\":\"$D2AGO\",\"endDate\":\"$D1AGO\"}" | jq -r .trip.id)
+IT_U=$(curl -s -b $J1 $API/trips/$UNSETTLED | jq -r .trip.invite_token)
+jcode POST $J2 $API/trips/invite/$IT_U/join >/dev/null
+jpost $J1 $API/trips/$UNSETTLED/expenses '{"description":"Hütte","amount":50}' >/dev/null
+
 R2=$(docker exec $CT node dist/scripts/run-retention.js | tail -1)
 check "Beendete Reise (8 Tage) gelöscht" 1 "$(echo "$R2" | jq -r ".finishedTrips >= 1" | sed "s/true/1/")"
 check "Nie beendete Reise (95 Tage) gelöscht" 1 "$(echo "$R2" | jq -r ".staleTrips >= 1" | sed "s/true/1/")"
+check "Real beendete Reise (end_date, 8 Tage) gelöscht" 1 "$(echo "$R2" | jq -r ".endedTrips >= 1" | sed "s/true/1/")"
+check "Beendet + beglichen sofort gelöscht" 1 "$(echo "$R2" | jq -r ".settledTrips >= 1" | sed "s/true/1/")"
 check "Reise + Präferenzen + Stimmen weg" 0 "$($PSQL -c "select (select count(*) from trips where id in ('$TID','$STALE')) + (select count(*) from participant_preferences where trip_id='$TID') + (select count(*) from votes where trip_id='$TID')")"
 check "  Einkaufsliste und Aktivitäten ebenfalls weg" 0 "$($PSQL -c "select (select count(*) from grocery_items where trip_id='$TID') + (select count(*) from trip_activities where trip_id='$TID')")"
+check "Real beendete Reise weg" 0 "$($PSQL -c "select count(*) from trips where id='$ENDED'")"
+check "Beendet + beglichen weg" 0 "$($PSQL -c "select count(*) from trips where id='$SETTLED'")"
+check "Beendet, aber noch offen: bleibt vorerst" 1 "$($PSQL -c "select count(*) from trips where id='$UNSETTLED'")"
+check "  Ausgaben der gelöschten Reisen ebenfalls weg" 0 "$($PSQL -c "select count(*) from trip_expenses where trip_id in ('$ENDED','$SETTLED')")"
+$PSQL -c "delete from trips where id='$UNSETTLED'" >/dev/null
 
 echo "== Konto und Reise selbst löschen =="
 T2=$(jpost $J2 $API/trips '{"title":"Zwei","location":"X","dateOptions":[{"label":"a","startDate":"2026-11-06","endDate":"2026-11-08"}]}' | jq -r .trip.id)

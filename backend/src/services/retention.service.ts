@@ -1,36 +1,83 @@
 import { query } from '../db/pool';
 import { env } from '../config/env';
+import { computeLedger } from './ledger.service';
+import { deleteReceipt } from '../utils/receiptStorage';
 
 export interface RetentionReport {
   finishedTrips: number;
+  endedTrips: number;
+  settledTrips: number;
   staleTrips: number;
   invites: number;
   resets: number;
   verifications: number;
 }
 
+/** Holt die Dateinamen aller Belege der angegebenen Reisen (bevor sie per CASCADE mitgelöscht werden). */
+async function collectReceiptPaths(tripIds: string[]): Promise<string[]> {
+  if (tripIds.length === 0) return [];
+  const result = await query<{ receipt_path: string }>(
+    'SELECT receipt_path FROM trip_expenses WHERE trip_id = ANY($1) AND receipt_path IS NOT NULL',
+    [tripIds]
+  );
+  return result.rows.map((r) => r.receipt_path);
+}
+
+/** Löscht die angegebenen Reisen (samt alles per CASCADE) und räumt danach ihre Beleg-Dateien weg. */
+async function deleteTripsByIds(tripIds: string[]): Promise<number> {
+  if (tripIds.length === 0) return 0;
+  const receiptPaths = await collectReceiptPaths(tripIds);
+  const result = await query('DELETE FROM trips WHERE id = ANY($1)', [tripIds]);
+  await Promise.all(receiptPaths.map((p) => deleteReceipt(p)));
+  return result.rowCount ?? 0;
+}
+
 /**
  * Datensparsamkeit: löscht Daten, die nicht mehr gebraucht werden.
  *
- * - Reisen mit beendeter Abstimmung: `TRIP_RETENTION_DAYS` Tage nach dem Ende (samt Stimmen,
- *   Notizen, Präferenzen, Teilnahmen und gespeicherten Suchergebnissen – per ON DELETE CASCADE).
+ * - Abstimmung beendet: `TRIP_RETENTION_DAYS` Tage nach dem Ende der Abstimmung.
+ * - Reise real beendet (`end_date` erreicht, z. B. Planungsmodus): `TRIP_RETENTION_DAYS` Tage
+ *   nach dem tatsächlichen Ende – oder sofort, sobald alle Schulden beglichen sind.
  * - Nie abgeschlossene Reisen: spätestens `TRIP_MAX_AGE_DAYS` Tage nach dem Erstellen.
  * - Abgelaufene bzw. verbrauchte Einladungen, Reset-Links und Registrierungsanfragen.
  */
 export async function runRetention(): Promise<RetentionReport> {
-  const finished = await query(
-    `DELETE FROM trips
-     WHERE voting_closed_at IS NOT NULL
-       AND voting_closed_at < now() - ($1 || ' days')::interval`,
+  const finishedIds = await query<{ id: string }>(
+    `SELECT id FROM trips
+     WHERE voting_closed_at IS NOT NULL AND voting_closed_at < now() - ($1 || ' days')::interval`,
     [String(env.tripRetentionDays)]
   );
+  const finishedTrips = await deleteTripsByIds(finishedIds.rows.map((r) => r.id));
 
-  const stale = await query(
-    `DELETE FROM trips
-     WHERE voting_closed_at IS NULL
-       AND created_at < now() - ($1 || ' days')::interval`,
+  // Reise real beendet (end_date erreicht) und die Löschfrist ist abgelaufen
+  const endedIds = await query<{ id: string }>(
+    `SELECT id FROM trips
+     WHERE voting_closed_at IS NULL AND end_date IS NOT NULL
+       AND end_date::timestamptz < now() - ($1 || ' days')::interval`,
+    [String(env.tripRetentionDays)]
+  );
+  const endedTrips = await deleteTripsByIds(endedIds.rows.map((r) => r.id));
+
+  // Reise real beendet, Frist läuft noch, aber alle Schulden sind schon beglichen -> nicht warten
+  const withinGrace = await query<{ id: string }>(
+    `SELECT id FROM trips
+     WHERE voting_closed_at IS NULL AND end_date IS NOT NULL
+       AND end_date::timestamptz < now()
+       AND end_date::timestamptz >= now() - ($1 || ' days')::interval`,
+    [String(env.tripRetentionDays)]
+  );
+  const settledIds: string[] = [];
+  for (const row of withinGrace.rows) {
+    const ledger = await computeLedger(row.id);
+    if (ledger.settled && ledger.totalExpenses > 0) settledIds.push(row.id);
+  }
+  const settledTrips = await deleteTripsByIds(settledIds);
+
+  const staleIds = await query<{ id: string }>(
+    `SELECT id FROM trips WHERE voting_closed_at IS NULL AND created_at < now() - ($1 || ' days')::interval`,
     [String(env.tripMaxAgeDays)]
   );
+  const staleTrips = await deleteTripsByIds(staleIds.rows.map((r) => r.id));
 
   const invites = await query(
     `DELETE FROM user_invites
@@ -49,8 +96,10 @@ export async function runRetention(): Promise<RetentionReport> {
   );
 
   return {
-    finishedTrips: finished.rowCount ?? 0,
-    staleTrips: stale.rowCount ?? 0,
+    finishedTrips,
+    endedTrips,
+    settledTrips,
+    staleTrips,
     invites: invites.rowCount ?? 0,
     resets: resets.rowCount ?? 0,
     verifications: verifications.rowCount ?? 0,

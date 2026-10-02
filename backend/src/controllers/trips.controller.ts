@@ -309,16 +309,16 @@ export async function clearAccommodationPick(req: Request, res: Response) {
   const { tripId } = req.params;
   if (req.participant!.tripId !== tripId) throw forbidden();
 
-  const result = await query<Trip>(
+  const result = await query(
     `UPDATE trips SET
        accommodation_title = NULL, accommodation_address = NULL, accommodation_url = NULL,
        accommodation_image_url = NULL, accommodation_note = NULL, accommodation_rating = NULL,
        accommodation_amenities = '{}', accommodation_picked_by = NULL, accommodation_picked_at = NULL
-     WHERE id = $1 RETURNING *`,
+     WHERE id = $1 RETURNING id`,
     [tripId]
   );
   if (!result.rows[0]) throw notFound('Trip nicht gefunden');
-  res.json({ trip: result.rows[0] });
+  res.status(204).send();
 }
 
 /** POST /api/trips/:tripId/reopen-voting — nur der Ersteller darf das Voting wieder öffnen. */

@@ -19,6 +19,8 @@ export interface LedgerSummary {
   balances: LedgerBalance[];
   suggestions: SettlementSuggestion[];
   totalExpenses: number;
+  /** Spenden von außen, die die Kosten der Mitreisenden senken */
+  totalDonations: number;
   /** true, wenn alle Salden (nahezu) bei 0 liegen – Grundlage für die automatische Löschung */
   settled: boolean;
 }
@@ -72,16 +74,32 @@ export async function computeLedger(tripId: string): Promise<LedgerSummary> {
     applyExpense(accommodation.accommodation_paid_by, amount, allMemberIds);
   }
 
-  // Wie Unterkunft und Einkäufe: auf alle aktuellen Mitglieder verteilt. Wer der Reise erst nach dem
-  // Eintragen einer Ausgabe beitritt, fährt trotzdem mit und trägt die gemeinsamen Kosten mit.
-  const expenses = await query<{ paid_by: string; amount: string }>(
-    'SELECT paid_by, amount FROM trip_expenses WHERE trip_id = $1',
+  // Standard wie Unterkunft und Einkäufe: auf alle aktuellen Mitglieder verteilt (auch auf später
+  // Beitretende). Wurde beim Eintragen eine Auswahl getroffen, nur auf diese Personen.
+  const expenses = await query<{ paid_by: string; amount: string; split_all: boolean; shared_by: string[] }>(
+    `SELECT e.paid_by, e.amount, e.split_all,
+            ARRAY(SELECT ep.trip_user_id::text FROM trip_expense_participants ep WHERE ep.expense_id = e.id) AS shared_by
+     FROM trip_expenses e WHERE e.trip_id = $1`,
     [tripId]
   );
   for (const e of expenses.rows) {
     const amount = Number(e.amount);
     totalExpenses += amount;
-    applyExpense(e.paid_by, amount, allMemberIds);
+    const sharedBy = e.split_all ? [] : e.shared_by.filter((id) => balance.has(id));
+    applyExpense(e.paid_by, amount, sharedBy.length > 0 ? sharedBy : allMemberIds);
+  }
+
+  // Spenden von außen: der Empfänger hält das Geld für die Gruppe, es senkt die Kosten aller gleichmäßig
+  // (rechnerisch eine negative Ausgabe des Empfängers).
+  const donations = await query<{ received_by: string; amount: string }>(
+    'SELECT received_by, amount FROM trip_donations WHERE trip_id = $1',
+    [tripId]
+  );
+  let totalDonations = 0;
+  for (const d of donations.rows) {
+    const amount = Number(d.amount);
+    totalDonations += amount;
+    applyExpense(d.received_by, -amount, allMemberIds);
   }
 
   const settlements = await query<{ from_trip_user_id: string; to_trip_user_id: string; amount: string }>(
@@ -104,6 +122,7 @@ export async function computeLedger(tripId: string): Promise<LedgerSummary> {
     balances,
     suggestions: simplifyDebts(balances),
     totalExpenses: Math.round(totalExpenses * 100) / 100,
+    totalDonations: Math.round(totalDonations * 100) / 100,
     settled: balances.every((b) => Math.abs(b.balance) < EPSILON),
   };
 }

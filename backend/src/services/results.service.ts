@@ -109,8 +109,11 @@ export async function computeTripResults(tripId: string): Promise<TripResults> {
   const notesResult = await query<Note>('SELECT * FROM notes WHERE trip_id = $1', [tripId]);
   const topWishes = computeWishFrequency(notesResult.rows);
 
-  // Alle Mitglieder zählen (der Ersteller stimmt ebenfalls ab)
-  const participantsResult = await query<{ id: string }>('SELECT id FROM trip_users WHERE trip_id = $1', [tripId]);
+  // Alle Mitglieder zählen (der Ersteller stimmt ebenfalls ab), Platzhalter ohne Konto nicht
+  const participantsResult = await query<{ id: string }>(
+    'SELECT id FROM trip_users WHERE trip_id = $1 AND NOT is_placeholder',
+    [tripId]
+  );
   const votedParticipantIds = new Set(votesResult.rows.map((v) => v.trip_user_id));
 
   const prefsResult = await query<{

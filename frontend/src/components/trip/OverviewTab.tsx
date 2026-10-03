@@ -1,15 +1,16 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import useSWR from 'swr';
-import type { DateOption, LedgerSummary, TripDetailResponse } from '@shared/types';
+import type { DateOption, GroceryItem, LedgerSummary, TripDetailResponse, TripParticipant } from '@shared/types';
 import { Button } from '@/components/ui/Button';
-import { ConfirmDialog } from '@/components/ui/Dialog';
+import { ConfirmDialog, Dialog } from '@/components/ui/Dialog';
+import { Input, Select } from '@/components/ui/Field';
 import { Alert, Avatar, Badge, Skeleton } from '@/components/ui/Feedback';
-import { IconCheck, IconCopy, IconLink, IconLock, IconReceipt, IconTrash } from '@/components/ui/Icons';
+import { IconCheck, IconCopy, IconLink, IconLock, IconPlus, IconReceipt, IconTrash, IconUtensils } from '@/components/ui/Icons';
 import { useToast } from '@/components/ui/Toast';
-import { apiFetch } from '@/lib/api';
+import { apiFetch, errorMessage } from '@/lib/api';
 import { copyToClipboard } from '@/lib/clipboard';
 import { TRIP_STATUS_LABELS, TRIP_TYPE_LABELS, formatDateRange, formatDateTime, formatMoney, pluralize } from '@/lib/format';
 
@@ -17,11 +18,13 @@ export function OverviewTab({
   detail,
   onChanged,
   onOpenLedger,
+  onOpenFood,
   isNew,
 }: {
   detail: TripDetailResponse;
   onChanged: () => Promise<unknown>;
   onOpenLedger: () => void;
+  onOpenFood: () => void;
   isNew: boolean;
 }) {
   const { trip, participants, myRole, inviteLink, progress } = detail;
@@ -30,6 +33,11 @@ export function OverviewTab({
   const options = useSWR<{ dateOptions: DateOption[] }>(`/trips/${trip.id}/date-options`);
   const config = useSWR<{ tripRetentionDays: number; tripMaxAgeDays: number }>('/auth/config');
   const ledger = useSWR<LedgerSummary>(`/trips/${trip.id}/balances`);
+  const groceries = useSWR<{ items: GroceryItem[] }>(`/trips/${trip.id}/groceries`);
+  const me = detail.myParticipantId;
+  const myDebts = ledger.data?.suggestions.filter((s) => s.fromTripUserId === me) ?? [];
+  const myCredits = ledger.data?.suggestions.filter((s) => s.toTripUserId === me) ?? [];
+  const myShoppingCount = groceries.data?.items.filter((i) => i.claimed_by === me && !i.checked_at).length ?? 0;
   const [confirmClose, setConfirmClose] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [reopening, setReopening] = useState(false);
@@ -72,6 +80,68 @@ export function OverviewTab({
       setReopening(false);
     }
   }
+
+  // -- Platzhalter (Mitreisende ohne Konto) --------------------------------
+  const [placeholderOpen, setPlaceholderOpen] = useState(false);
+  const [placeholderName, setPlaceholderName] = useState('');
+  const [placeholderError, setPlaceholderError] = useState<string | null>(null);
+  const [savingPlaceholder, setSavingPlaceholder] = useState(false);
+  const [mergeTarget, setMergeTarget] = useState<TripParticipant | null>(null);
+  const [mergeInto, setMergeInto] = useState('');
+  const [merging, setMerging] = useState(false);
+  const realMembers = participants.filter((p) => !p.is_placeholder);
+
+  async function addPlaceholder(event: FormEvent) {
+    event.preventDefault();
+    if (!placeholderName.trim()) return;
+    setPlaceholderError(null);
+    setSavingPlaceholder(true);
+    try {
+      await apiFetch(`/trips/${trip.id}/placeholders`, { method: 'POST', body: { name: placeholderName.trim() } });
+      setPlaceholderName('');
+      setPlaceholderOpen(false);
+      await Promise.all([onChanged(), ledger.mutate()]);
+      toast('Person hinzugefügt', 'success');
+    } catch (err) {
+      setPlaceholderError(errorMessage(err));
+    } finally {
+      setSavingPlaceholder(false);
+    }
+  }
+
+  async function removePlaceholder(p: TripParticipant) {
+    try {
+      await apiFetch(`/trips/${trip.id}/placeholders/${p.id}`, { method: 'DELETE' });
+      await Promise.all([onChanged(), ledger.mutate()]);
+      toast(`${p.name} entfernt`, 'success');
+    } catch (err) {
+      toast(errorMessage(err), 'error');
+    }
+  }
+
+  async function mergePlaceholder(event: FormEvent) {
+    event.preventDefault();
+    if (!mergeTarget || !mergeInto) return;
+    setMerging(true);
+    try {
+      await apiFetch(`/trips/${trip.id}/placeholders/${mergeTarget.id}/merge`, {
+        method: 'POST',
+        body: { intoTripUserId: mergeInto },
+      });
+      setMergeTarget(null);
+      await Promise.all([onChanged(), ledger.mutate()]);
+      toast('Platzhalter übertragen', 'success');
+    } catch (err) {
+      toast(errorMessage(err), 'error');
+    } finally {
+      setMerging(false);
+    }
+  }
+
+  useEffect(() => {
+    if (mergeTarget) setMergeInto(realMembers[0]?.id ?? '');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mergeTarget]);
 
   async function switchMode(mode: 'voting' | 'planning') {
     setSwitchingMode(true);
@@ -144,17 +214,89 @@ export function OverviewTab({
         </div>
         <ul className="mt-5 divide-y divide-line/60">
           {participants.map((p) => (
-            <li key={p.id} className="flex items-center gap-3.5 py-3 first:pt-0 last:pb-0">
+            <li key={p.id} className="flex flex-wrap items-center gap-3.5 py-3 first:pt-0 last:pb-0">
               <Avatar name={p.name} size={40} />
               <div className="min-w-0 flex-1">
                 <p className="truncate text-callout font-medium">{p.name}</p>
-                <p className="text-footnote text-secondary">dabei seit {formatDateTime(p.joined_at)}</p>
+                <p className="text-footnote text-secondary">
+                  {p.is_placeholder ? 'noch ohne Konto · zählt in der Kasse mit' : `dabei seit ${formatDateTime(p.joined_at)}`}
+                </p>
               </div>
               {p.role === 'creator' && <Badge tone="accent">Ersteller</Badge>}
+              {p.is_placeholder && <Badge tone="neutral">Platzhalter</Badge>}
+              {p.is_placeholder && isCreator && (
+                <div className="flex items-center gap-1.5">
+                  <Button size="sm" variant="plain" onClick={() => setMergeTarget(p)}>
+                    Übertragen
+                  </Button>
+                  <button
+                    type="button"
+                    onClick={() => removePlaceholder(p)}
+                    aria-label={`${p.name} entfernen`}
+                    className="h-8 w-8 shrink-0 rounded-full text-secondary transition hover:bg-danger/10 hover:text-danger"
+                  >
+                    <IconTrash size={16} className="mx-auto" />
+                  </button>
+                </div>
+              )}
             </li>
           ))}
         </ul>
+        {isCreator && (
+          <div className="mt-5 border-t border-line/60 pt-4">
+            <Button size="sm" variant="tinted" icon={<IconPlus size={16} />} onClick={() => setPlaceholderOpen(true)}>
+              Person ohne Konto hinzufügen
+            </Button>
+            <p className="mt-2 text-footnote text-secondary">
+              Für Mitreisende, die sich noch nicht angemeldet haben. Sie zählen in der Kasse mit; meldet sich die Person
+              später an, überträgst du den Platzhalter auf ihr Konto.
+            </p>
+          </div>
+        )}
       </section>
+
+      <Dialog open={placeholderOpen} onClose={() => setPlaceholderOpen(false)} title="Person ohne Konto hinzufügen">
+        <form onSubmit={addPlaceholder} className="space-y-4 p-5 sm:p-6" noValidate>
+          {placeholderError && <Alert tone="error">{placeholderError}</Alert>}
+          <Input label="Name" placeholder="z. B. Max" maxLength={80} value={placeholderName} onChange={(e) => setPlaceholderName(e.target.value)} />
+          <div className="flex justify-end gap-3">
+            <Button type="button" variant="plain" onClick={() => setPlaceholderOpen(false)}>
+              Abbrechen
+            </Button>
+            <Button type="submit" loading={savingPlaceholder} disabled={!placeholderName.trim()}>
+              Hinzufügen
+            </Button>
+          </div>
+        </form>
+      </Dialog>
+
+      <Dialog open={mergeTarget !== null} onClose={() => setMergeTarget(null)} title="Platzhalter übertragen">
+        <form onSubmit={mergePlaceholder} className="space-y-4 p-5 sm:p-6" noValidate>
+          <p className="text-callout text-secondary">
+            Alles, was bei <span className="font-medium text-label">{mergeTarget?.name}</span> eingetragen ist (Zahlungen,
+            Ausgaben, Spenden), geht auf dieses Konto über. Der Platzhalter verschwindet danach.
+          </p>
+          {realMembers.length === 0 ? (
+            <Alert tone="info">Es gibt noch kein angemeldetes Mitglied, auf das du übertragen kannst.</Alert>
+          ) : (
+            <Select label="Auf wen übertragen?" value={mergeInto} onChange={(e) => setMergeInto(e.target.value)}>
+              {realMembers.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.name}
+                </option>
+              ))}
+            </Select>
+          )}
+          <div className="flex justify-end gap-3">
+            <Button type="button" variant="plain" onClick={() => setMergeTarget(null)}>
+              Abbrechen
+            </Button>
+            <Button type="submit" loading={merging} disabled={!mergeInto}>
+              Übertragen
+            </Button>
+          </div>
+        </form>
+      </Dialog>
 
       <section className="card p-6 sm:p-8" aria-labelledby="status-heading">
         <div className="flex flex-wrap items-center justify-between gap-4">
@@ -200,31 +342,57 @@ export function OverviewTab({
         )}
       </section>
 
-      <section className="card p-6 sm:p-8" aria-labelledby="payment-heading">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="min-w-0">
-            <h2 id="payment-heading" className="text-title3">
-              Zahlungsstatus
-            </h2>
-            {!ledger.data ? (
-              <div className="mt-2 w-48">
-                <Skeleton className="h-5" />
-              </div>
-            ) : ledger.data.totalExpenses === 0 ? (
-              <p className="mt-1 text-callout text-secondary">Noch keine Ausgaben erfasst.</p>
+      <section className="card space-y-4 p-6 sm:p-8" aria-labelledby="payment-heading">
+        <h2 id="payment-heading" className="text-title3">
+          Geld &amp; Einkauf
+        </h2>
+        {!ledger.data ? (
+          <Skeleton className="h-12" />
+        ) : (
+          <div className="space-y-2">
+            {ledger.data.totalExpenses === 0 ? (
+              <p className="text-callout text-secondary">Noch keine Ausgaben erfasst.</p>
             ) : ledger.data.settled ? (
-              <p className="mt-1 flex items-center gap-1.5 text-callout text-success">
+              <p className="flex items-center gap-1.5 text-callout text-success">
                 <IconCheck size={16} /> Alle Schulden beglichen ({formatMoney(ledger.data.totalExpenses)} insgesamt).
               </p>
             ) : (
-              <p className="mt-1 text-callout text-secondary">
-                Noch offen: {formatMoney(ledger.data.suggestions.reduce((sum, s) => sum + s.amount, 0))} von{' '}
+              <p className="text-callout text-secondary">
+                Gruppe: noch {formatMoney(ledger.data.suggestions.reduce((sum, s) => sum + s.amount, 0))} offen von{' '}
                 {formatMoney(ledger.data.totalExpenses)}.
               </p>
             )}
+            {myDebts.length > 0 && (
+              <ul className="space-y-1.5">
+                {myDebts.map((s) => (
+                  <li key={s.toTripUserId} className="rounded-control bg-warning/10 px-3.5 py-2.5 text-callout">
+                    Du zahlst <span className="font-semibold">{s.toName}</span>{' '}
+                    <span className="font-semibold">{formatMoney(s.amount)}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {myCredits.length > 0 && (
+              <ul className="space-y-1.5">
+                {myCredits.map((s) => (
+                  <li key={s.fromTripUserId} className="rounded-control bg-success/10 px-3.5 py-2.5 text-callout">
+                    <span className="font-semibold">{s.fromName}</span> zahlt dir{' '}
+                    <span className="font-semibold">{formatMoney(s.amount)}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {ledger.data.totalExpenses > 0 && !ledger.data.settled && myDebts.length === 0 && myCredits.length === 0 && (
+              <p className="text-callout text-secondary">Du selbst bist ausgeglichen.</p>
+            )}
           </div>
+        )}
+        <div className="flex flex-wrap gap-2 pt-1">
           <Button variant="tinted" size="sm" icon={<IconReceipt size={16} />} onClick={onOpenLedger}>
             Zur Kasse
+          </Button>
+          <Button variant="plain" size="sm" icon={<IconUtensils size={16} />} onClick={onOpenFood}>
+            {myShoppingCount > 0 ? `Meine Einkaufsliste (${myShoppingCount})` : 'Zur Einkaufsliste'}
           </Button>
         </div>
       </section>

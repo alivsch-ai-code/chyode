@@ -131,6 +131,7 @@ CREATE TABLE IF NOT EXISTS trip_users (
   role           TEXT NOT NULL DEFAULT 'participant'
                  CHECK (role IN ('creator', 'participant')),
   session_token  TEXT UNIQUE,          -- veraltet: nur noch für Altdaten, wird nicht mehr genutzt
+  is_placeholder BOOLEAN NOT NULL DEFAULT false, -- fährt mit, hat noch kein Konto (zählt nur in der Kasse)
   joined_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
@@ -261,14 +262,14 @@ CREATE TABLE IF NOT EXISTS trip_expenses (
   description   TEXT NOT NULL,
   amount        NUMERIC(10, 2) NOT NULL CHECK (amount > 0),
   receipt_path  TEXT,
+  split_all     BOOLEAN NOT NULL DEFAULT true,  -- false: nur auf die Personen in trip_expense_participants
   created_by    UUID REFERENCES trip_users(id) ON DELETE SET NULL,
   created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 CREATE INDEX IF NOT EXISTS idx_trip_expenses_trip_id ON trip_expenses(trip_id);
 
--- trip_expense_participants: Mitglieder zum Erfassungszeitpunkt (nur noch zur Nachvollziehbarkeit;
--- die Abrechnung verteilt Ausgaben immer auf alle aktuellen Mitglieder)
+-- trip_expense_participants: wer sich eine Ausgabe teilt, wenn split_all = false
 CREATE TABLE IF NOT EXISTS trip_expense_participants (
   expense_id    UUID NOT NULL REFERENCES trip_expenses(id) ON DELETE CASCADE,
   trip_user_id  UUID NOT NULL REFERENCES trip_users(id) ON DELETE CASCADE,
@@ -291,6 +292,23 @@ CREATE TABLE IF NOT EXISTS trip_settlements (
 );
 
 CREATE INDEX IF NOT EXISTS idx_trip_settlements_trip_id ON trip_settlements(trip_id);
+
+-- ------------------------------------------------------------
+-- trip_donations: Spende von außen (Spender fährt nicht mit, nur ein Name); das Geld erhält ein
+-- Mitglied, es senkt die Kosten für alle Mitreisenden gleichmäßig
+-- ------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS trip_donations (
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  trip_id      UUID NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
+  donor_name   TEXT NOT NULL,
+  amount       NUMERIC(10, 2) NOT NULL CHECK (amount > 0),
+  received_by  UUID NOT NULL REFERENCES trip_users(id) ON DELETE CASCADE,
+  note         TEXT,
+  created_by   UUID REFERENCES trip_users(id) ON DELETE SET NULL,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_trip_donations_trip_id ON trip_donations(trip_id);
 
 -- ------------------------------------------------------------
 -- trip_stay_suggestions: Unterkunfts-Vorschläge durch die Gruppe (manuell, ohne Booking/Airbnb)

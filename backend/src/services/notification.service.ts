@@ -24,7 +24,7 @@ export async function notifyResultsIfReady(tripId: string): Promise<{ sent: numb
   if (!trip || !trip.results_released_at || trip.results_notified_at) return null;
 
   const members = await query<{ id: string; name: string; email: string | null }>(
-    'SELECT id, name, email FROM trip_users WHERE trip_id = $1',
+    'SELECT id, name, email FROM trip_users WHERE trip_id = $1 AND NOT is_placeholder', // Platzhalter stimmen nicht ab
     [tripId]
   );
   if (members.rows.length === 0) return null;

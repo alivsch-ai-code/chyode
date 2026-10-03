@@ -119,16 +119,20 @@ export async function getTrip(req: Request, res: Response) {
   const result = await query<Trip>('SELECT * FROM trips WHERE id = $1', [tripId]);
   if (!result.rows[0]) throw notFound('Trip nicht gefunden');
 
-  const participants = await query<Pick<TripUser, 'id' | 'name' | 'role' | 'joined_at'>>(
-    'SELECT id, name, role, joined_at FROM trip_users WHERE trip_id = $1 ORDER BY joined_at ASC',
+  const participants = await query<Pick<TripUser, 'id' | 'name' | 'role' | 'joined_at'> & { is_placeholder: boolean }>(
+    'SELECT id, name, role, joined_at, is_placeholder FROM trip_users WHERE trip_id = $1 ORDER BY joined_at ASC',
     [tripId]
   );
 
   // Nur der Ersteller sieht, wie viele schon abgestimmt haben (Fortschritt, nicht das Ergebnis).
+  // Platzhalter haben kein Konto und stimmen nicht ab.
   let progress: { voted: number; total: number } | undefined;
   if (req.participant!.role === 'creator') {
     const voted = await query<{ count: string }>('SELECT COUNT(DISTINCT trip_user_id) FROM votes WHERE trip_id = $1', [tripId]);
-    progress = { voted: parseInt(voted.rows[0].count, 10), total: participants.rows.length };
+    progress = {
+      voted: parseInt(voted.rows[0].count, 10),
+      total: participants.rows.filter((p) => !p.is_placeholder).length,
+    };
   }
 
   res.json({

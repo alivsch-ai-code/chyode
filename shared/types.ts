@@ -130,6 +130,9 @@ export interface TripExpense {
   created_at: string;
   paid_by_name?: string;
   hasReceipt: boolean;
+  /** true: auf alle Mitglieder verteilt; sonst nur auf shared_by_names */
+  split_all: boolean;
+  shared_by_names: string[] | null;
 }
 
 export interface TripSettlement {
@@ -164,6 +167,7 @@ export interface LedgerSummary {
   balances: LedgerBalance[];
   suggestions: SettlementSuggestion[];
   totalExpenses: number;
+  totalDonations: number;
   settled: boolean;
 }
 
@@ -206,6 +210,20 @@ export interface TripParticipant {
   name: string;
   role: ParticipantRole;
   joined_at: string;
+  /** fährt mit, hat aber (noch) kein Konto – zählt nur in der Kasse */
+  is_placeholder?: boolean;
+}
+
+export interface TripDonation {
+  id: string;
+  trip_id: string;
+  donor_name: string;
+  amount: string;
+  received_by: string;
+  note: string | null;
+  created_by: string | null;
+  created_at: string;
+  received_by_name?: string;
 }
 
 export interface TripDetailResponse {

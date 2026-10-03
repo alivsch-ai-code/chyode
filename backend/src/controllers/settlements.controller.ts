@@ -5,12 +5,17 @@ import { badRequest, forbidden, notFound } from '../utils/httpError';
 import { isUuid } from '../middleware/auth';
 
 const addSettlementSchema = z.object({
+  fromTripUserId: z.string().trim().optional(), // wer gezahlt hat; Standard: wer den Eintrag anlegt
   toTripUserId: z.string().trim().min(1, 'Bitte wähle, an wen gezahlt wurde'),
   amount: z.number().positive('Der Betrag muss größer als 0 sein').max(100000),
   note: z.string().trim().max(300).optional(),
 });
 
-/** POST /api/trips/:tripId/settlements — trägt eine manuelle Zahlung ein (gleicht Schulden aus). */
+/**
+ * POST /api/trips/:tripId/settlements — trägt eine Zahlung zwischen zwei Mitgliedern ein.
+ * Eintragen darf, wer selbst beteiligt ist (Zahler oder Empfänger, z. B. „Stan hat mir bezahlt“),
+ * der Ersteller, oder jedes Mitglied, wenn ein Platzhalter ohne Konto beteiligt ist.
+ */
 export async function addSettlement(req: Request, res: Response) {
   const { tripId } = req.params;
   if (req.participant!.tripId !== tripId) throw forbidden();
@@ -18,15 +23,28 @@ export async function addSettlement(req: Request, res: Response) {
   const parsed = addSettlementSchema.safeParse(req.body);
   if (!parsed.success) throw badRequest(parsed.error.issues[0].message);
   const { toTripUserId, amount, note } = parsed.data;
+  const me = req.participant!.id;
+  const fromTripUserId = parsed.data.fromTripUserId || me;
 
-  if (toTripUserId === req.participant!.id) throw badRequest('Du kannst keine Zahlung an dich selbst eintragen');
-  const member = await query('SELECT 1 FROM trip_users WHERE id = $1 AND trip_id = $2', [toTripUserId, tripId]);
-  if (!member.rows[0]) throw badRequest('Unbekanntes Mitglied');
+  if (fromTripUserId === toTripUserId) throw badRequest('Zahler und Empfänger müssen verschieden sein');
+  if (!isUuid(fromTripUserId) || !isUuid(toTripUserId)) throw badRequest('Unbekanntes Mitglied');
+
+  const parties = await query<{ id: string; is_placeholder: boolean }>(
+    'SELECT id, is_placeholder FROM trip_users WHERE trip_id = $1 AND id = ANY($2)',
+    [tripId, [fromTripUserId, toTripUserId]]
+  );
+  if (parties.rows.length !== 2) throw badRequest('Unbekanntes Mitglied');
+
+  const involved = fromTripUserId === me || toTripUserId === me;
+  const placeholderInvolved = parties.rows.some((p) => p.is_placeholder);
+  if (!involved && !placeholderInvolved && req.participant!.role !== 'creator') {
+    throw forbidden('Du kannst nur Zahlungen eintragen, an denen du beteiligt bist');
+  }
 
   const result = await query(
     `INSERT INTO trip_settlements (trip_id, from_trip_user_id, to_trip_user_id, amount, note, created_by)
      VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-    [tripId, req.participant!.id, toTripUserId, amount, note || null, req.participant!.id]
+    [tripId, fromTripUserId, toTripUserId, amount, note || null, me]
   );
   res.status(201).json({ settlement: result.rows[0] });
 }

@@ -204,7 +204,13 @@ export default function TripPage({ params }: { params: { tripId: string } }) {
 
       <div id={`trip-panel-${tab}`} role="tabpanel" aria-labelledby={`trip-tab-${tab}`} tabIndex={0} className="outline-none">
         {tab === 'overview' && (
-          <OverviewTab detail={data} onChanged={() => mutate()} onOpenLedger={() => changeTab('ledger')} isNew={isNew} />
+          <OverviewTab
+            detail={data}
+            onChanged={() => mutate()}
+            onOpenLedger={() => changeTab('ledger')}
+            onOpenFood={() => changeTab('food')}
+            isNew={isNew}
+          />
         )}
         {tab === 'dates' && (
           <DatesTab
@@ -213,7 +219,7 @@ export default function TripPage({ params }: { params: { tripId: string } }) {
             isCreator={isCreator}
             canSeeResults={canSeeResults}
             myParticipantId={myParticipantId}
-            participantCount={participants.length}
+            participantCount={participants.filter((p) => !p.is_placeholder).length}
           />
         )}
         {tab === 'prefs' && <PreferencesTab tripId={trip.id} votingOpen={trip.status === 'voting'} />}
@@ -241,7 +247,13 @@ export default function TripPage({ params }: { params: { tripId: string } }) {
         {tab === 'food' && <GroceryTab tripId={trip.id} myParticipantId={myParticipantId} />}
         {tab === 'activities' && <ActivitiesTab tripId={trip.id} myParticipantId={myParticipantId} />}
         {tab === 'ledger' && (
-          <LedgerTab tripId={trip.id} trip={trip} myParticipantId={myParticipantId} participants={participants} />
+          <LedgerTab
+            tripId={trip.id}
+            trip={trip}
+            myParticipantId={myParticipantId}
+            isCreator={isCreator}
+            participants={participants}
+          />
         )}
         {tab === 'ideas' && <IdeasTab tripId={trip.id} canSeeResults={canSeeResults} />}
       </div>

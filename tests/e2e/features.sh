@@ -236,6 +236,35 @@ jpost $J1 $API/trips/$LATE/expenses '{"description":"Steuer","amount":90}' >/dev
 jcode POST $J2 $API/trips/invite/$(curl -s -b $J1 $API/trips/$LATE | jq -r .trip.invite_token)/join >/dev/null
 check "Später Beigetretene teilen frühere Ausgaben" -45 "$(curl -s -b $J2 $API/trips/$LATE/balances | jq -r '.balances[] | select(.name=="E2E Zwei") | .balance')"
 jcode DELETE $J1 $API/trips/$LATE >/dev/null
+
+echo "== Platzhalter, Aufteilen auf Einzelne, Spenden =="
+SP=$(jpost $JC $API/trips '{"title":"Split","location":"X","dateOptions":[{"label":"a","startDate":"2026-11-06","endDate":"2026-11-08"}]}' | jq -r .trip.id)
+jcode POST $J1 $API/trips/invite/$(curl -s -b $JC $API/trips/$SP | jq -r .trip.invite_token)/join >/dev/null
+SP_C=$(curl -s -b $JC $API/trips/$SP | jq -r .myParticipantId); SP_1=$(curl -s -b $J1 $API/trips/$SP | jq -r .myParticipantId)
+check "Nur Ersteller legt Platzhalter an" 403 "$(jcode POST $J1 $API/trips/$SP/placeholders '{"name":"Max"}')"
+SP_P=$(curl -s -b $JC -X POST -H 'Content-Type: application/json' -d '{"name":"Max"}' $API/trips/$SP/placeholders | jq -r .participant.id)
+check "Platzhalter angelegt" true "$(curl -s -b $JC $API/trips/$SP | jq -r '.participants[] | select(.name=="Max") | .is_placeholder')"
+check "Platzhalter zählt nicht beim Abstimmen" 2 "$(curl -s -b $JC $API/trips/$SP | jq -r .progress.total)"
+jpost $JC $API/trips/$SP/expenses '{"description":"Hütte","amount":90}' >/dev/null
+jpost $J1 $API/trips/$SP/expenses "{\"description\":\"Taxi\",\"amount\":20,\"participantIds\":[\"$SP_1\",\"$SP_C\"]}" >/dev/null
+check "Ausgabe nur auf Ausgewählte verteilt" "Taxi:false" "$(curl -s -b $JC $API/trips/$SP/expenses | jq -r '.expenses[] | select(.description=="Taxi") | "\(.description):\(.split_all)"')"
+check "Leere Auswahl abgelehnt" 400 "$(jcode POST $J1 $API/trips/$SP/expenses '{"description":"X","amount":5,"participantIds":[]}')"
+BAL() { curl -s -b $JC $API/trips/$SP/balances | jq -r ".balances[] | select(.tripUserId==\"$1\") | .balance"; }
+check "Saldo Ersteller (90 alle, 20 zu zweit)" 50 "$(BAL $SP_C)"
+check "Saldo Mitglied" -20 "$(BAL $SP_1)"
+check "Platzhalter trägt seinen Anteil" -30 "$(BAL $SP_P)"
+check "Spende eingetragen" 201 "$(jcode POST $J1 $API/trips/$SP/donations "{\"donorName\":\"Oma Erika\",\"amount\":30,\"receivedBy\":\"$SP_C\"}")"
+check "Spende senkt Kosten: Ersteller" 30 "$(BAL $SP_C)"
+check "Spende senkt Kosten: Platzhalter" -20 "$(BAL $SP_P)"
+check "Spendensumme ausgewiesen" 30 "$(curl -s -b $JC $API/trips/$SP/balances | jq -r .totalDonations)"
+check "Zahlung für Platzhalter darf jeder eintragen" 201 "$(jcode POST $J1 $API/trips/$SP/settlements "{\"fromTripUserId\":\"$SP_P\",\"toTripUserId\":\"$SP_C\",\"amount\":20}")"
+check "Empfänger bestätigt Zahlung eines anderen" 201 "$(jcode POST $JC $API/trips/$SP/settlements "{\"fromTripUserId\":\"$SP_1\",\"toTripUserId\":\"$SP_C\",\"amount\":10}")"
+check "Danach alles beglichen" true "$(curl -s -b $JC $API/trips/$SP/balances | jq -r .settled)"
+check "Platzhalter mit Zahlungen nicht einfach löschbar" 400 "$(jcode DELETE $JC $API/trips/$SP/placeholders/$SP_P)"
+check "Nur Ersteller überträgt Platzhalter" 403 "$(jcode POST $J1 $API/trips/$SP/placeholders/$SP_P/merge "{\"intoTripUserId\":\"$SP_1\"}")"
+check "Platzhalter auf Konto übertragen" 204 "$(jcode POST $JC $API/trips/$SP/placeholders/$SP_P/merge "{\"intoTripUserId\":\"$SP_1\"}")"
+check "  Platzhalter weg, seine Zahlung gehört jetzt dem Konto" "2:2" "$($PSQL -c "select (select count(*) from trip_users where trip_id='$SP')||':'||(select count(*) from trip_settlements where trip_id='$SP' and from_trip_user_id='$SP_1')")"
+jcode DELETE $JC $API/trips/$SP >/dev/null
 check "Unterkunftspreis wieder entfernen" 204 "$(jcode DELETE $JC $API/trips/$TID/accommodation)"
 jcode PUT $JC $API/trips/$TID/accommodation '{"title":"Exclusive Alpenlodge Galsterberg"}' >/dev/null
 

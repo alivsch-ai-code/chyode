@@ -26,10 +26,22 @@ const upload = multer({
 /** Multer-Middleware: liest ein optionales Feld "receipt" (Formular-Upload). */
 export const receiptUpload = upload.single('receipt');
 
+// Im Formular-Upload (multipart) kommt die Liste als JSON-Text, als JSON-Body direkt als Array.
+const idList = z.preprocess((value) => {
+  if (typeof value !== 'string') return value;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return value;
+  }
+}, z.array(z.string().trim()).max(100));
+
 const addExpenseSchema = z.object({
   description: z.string().trim().min(1, 'Bitte gib an, worum es geht').max(200),
   amount: z.coerce.number().positive('Der Betrag muss größer als 0 sein').max(100000),
   paidBy: z.string().trim().optional(), // trip_user_id; Standard: wer den Eintrag anlegt
+  // nicht gesetzt = auf alle aktuellen Mitglieder verteilt; sonst nur auf diese Personen
+  participantIds: idList.optional(),
 });
 
 function shapeExpense<T extends { receipt_path?: string | null }>(row: T) {
@@ -39,7 +51,8 @@ function shapeExpense<T extends { receipt_path?: string | null }>(row: T) {
 
 /**
  * POST /api/trips/:tripId/expenses — trägt eine Ausgabe ein (z. B. Taxi, Tickets), optional mit
- * Beleg-Foto (multipart/form-data). Wird gleichmäßig unter allen aktuellen Mitgliedern aufgeteilt.
+ * Beleg-Foto (multipart/form-data). Ohne `participantIds` wird sie auf alle aktuellen Mitglieder
+ * verteilt (auch auf später Beitretende), mit `participantIds` nur auf diese Personen.
  */
 export async function addExpense(req: Request, res: Response) {
   const { tripId } = req.params;
@@ -47,13 +60,21 @@ export async function addExpense(req: Request, res: Response) {
 
   const parsed = addExpenseSchema.safeParse(req.body);
   if (!parsed.success) throw badRequest(parsed.error.issues[0].message);
-  const { description, amount, paidBy } = parsed.data;
+  const { description, amount, paidBy, participantIds } = parsed.data;
+
+  const members = await query<{ id: string }>('SELECT id FROM trip_users WHERE trip_id = $1', [tripId]);
+  const memberIds = new Set(members.rows.map((m) => m.id));
 
   let paidByTripUserId = req.participant!.id;
   if (paidBy && paidBy !== req.participant!.id) {
-    const member = await query('SELECT 1 FROM trip_users WHERE id = $1 AND trip_id = $2', [paidBy, tripId]);
-    if (!member.rows[0]) throw badRequest('Unbekanntes Mitglied als Zahler angegeben');
+    if (!memberIds.has(paidBy)) throw badRequest('Unbekanntes Mitglied als Zahler angegeben');
     paidByTripUserId = paidBy;
+  }
+
+  const sharedBy = participantIds ? [...new Set(participantIds)] : null;
+  if (sharedBy) {
+    if (sharedBy.length === 0) throw badRequest('Bitte wähle mindestens eine Person zum Aufteilen');
+    if (sharedBy.some((id) => !memberIds.has(id))) throw badRequest('Unbekanntes Mitglied beim Aufteilen');
   }
 
   let receiptPath: string | null = null;
@@ -62,20 +83,15 @@ export async function addExpense(req: Request, res: Response) {
   }
 
   try {
-    const members = await query<{ id: string }>('SELECT id FROM trip_users WHERE trip_id = $1', [tripId]);
-
     const expense = await withTransaction(async (client) => {
       const inserted = await client.query(
-        `INSERT INTO trip_expenses (trip_id, paid_by, description, amount, receipt_path, created_by)
-         VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-        [tripId, paidByTripUserId, description, amount, receiptPath, req.participant!.id]
+        `INSERT INTO trip_expenses (trip_id, paid_by, description, amount, receipt_path, split_all, created_by)
+         VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+        [tripId, paidByTripUserId, description, amount, receiptPath, sharedBy === null, req.participant!.id]
       );
       const row = inserted.rows[0];
-      for (const m of members.rows) {
-        await client.query('INSERT INTO trip_expense_participants (expense_id, trip_user_id) VALUES ($1, $2)', [
-          row.id,
-          m.id,
-        ]);
+      for (const id of sharedBy ?? []) {
+        await client.query('INSERT INTO trip_expense_participants (expense_id, trip_user_id) VALUES ($1, $2)', [row.id, id]);
       }
       return row;
     });
@@ -93,7 +109,12 @@ export async function listExpenses(req: Request, res: Response) {
   if (req.participant!.tripId !== tripId) throw forbidden();
 
   const result = await query(
-    `SELECT e.*, tu.name AS paid_by_name
+    `SELECT e.*, tu.name AS paid_by_name,
+            CASE WHEN e.split_all THEN NULL ELSE ARRAY(
+              SELECT p.name FROM trip_expense_participants ep
+              JOIN trip_users p ON p.id = ep.trip_user_id
+              WHERE ep.expense_id = e.id ORDER BY p.name
+            ) END AS shared_by_names
      FROM trip_expenses e
      JOIN trip_users tu ON tu.id = e.paid_by
      WHERE e.trip_id = $1

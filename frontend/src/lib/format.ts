@@ -91,8 +91,16 @@ export function formatDateTime(iso: string): string {
   return dateTimeFmt.format(new Date(iso));
 }
 
+/** Ganze Beträge ohne Nachkommastellen ("854 €"), sonst immer mit Cent ("854,16 €"). */
 export function formatMoney(amount: number, currency = 'EUR'): string {
-  return new Intl.NumberFormat(LOCALE, { style: 'currency', currency, maximumFractionDigits: 0 }).format(amount);
+  const cents = Math.round(amount * 100);
+  const digits = cents % 100 === 0 ? 0 : 2;
+  return new Intl.NumberFormat(LOCALE, {
+    style: 'currency',
+    currency,
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  }).format(cents / 100);
 }
 
 export function pluralize(count: number, singular: string, plural: string): string {

@@ -267,7 +267,8 @@ CREATE TABLE IF NOT EXISTS trip_expenses (
 
 CREATE INDEX IF NOT EXISTS idx_trip_expenses_trip_id ON trip_expenses(trip_id);
 
--- trip_expense_participants: wer sich an einer Ausgabe beteiligt (zum Erfassungszeitpunkt fixiert)
+-- trip_expense_participants: Mitglieder zum Erfassungszeitpunkt (nur noch zur Nachvollziehbarkeit;
+-- die Abrechnung verteilt Ausgaben immer auf alle aktuellen Mitglieder)
 CREATE TABLE IF NOT EXISTS trip_expense_participants (
   expense_id    UUID NOT NULL REFERENCES trip_expenses(id) ON DELETE CASCADE,
   trip_user_id  UUID NOT NULL REFERENCES trip_users(id) ON DELETE CASCADE,

@@ -28,8 +28,8 @@ const EPSILON = 0.01;
 /**
  * Berechnet, wer wem wie viel schuldet – live aus drei Quellen, nichts davon wird redundant
  * gespeichert: abgehakte Einkaufslisten-Artikel mit Preis (Zahler = wer abgehakt hat), die
- * Unterkunftskosten (Zahler = wer vorgestreckt hat) und manuelle Ausgaben samt ihrer fest
- * zugeordneten Beteiligten. Manuelle Zahlungen (trip_settlements) gleichen das wieder aus.
+ * Unterkunftskosten (Zahler = wer vorgestreckt hat) und manuelle Ausgaben – alles gleichmäßig auf
+ * alle aktuellen Mitglieder verteilt. Manuelle Zahlungen (trip_settlements) gleichen das wieder aus.
  */
 export async function computeLedger(tripId: string): Promise<LedgerSummary> {
   const members = await query<{ id: string; name: string }>('SELECT id, name FROM trip_users WHERE trip_id = $1', [
@@ -72,22 +72,16 @@ export async function computeLedger(tripId: string): Promise<LedgerSummary> {
     applyExpense(accommodation.accommodation_paid_by, amount, allMemberIds);
   }
 
-  const expenses = await query<{ id: string; paid_by: string; amount: string }>(
-    'SELECT id, paid_by, amount FROM trip_expenses WHERE trip_id = $1',
+  // Wie Unterkunft und Einkäufe: auf alle aktuellen Mitglieder verteilt. Wer der Reise erst nach dem
+  // Eintragen einer Ausgabe beitritt, fährt trotzdem mit und trägt die gemeinsamen Kosten mit.
+  const expenses = await query<{ paid_by: string; amount: string }>(
+    'SELECT paid_by, amount FROM trip_expenses WHERE trip_id = $1',
     [tripId]
   );
   for (const e of expenses.rows) {
-    const participants = await query<{ trip_user_id: string }>(
-      'SELECT trip_user_id FROM trip_expense_participants WHERE expense_id = $1',
-      [e.id]
-    );
     const amount = Number(e.amount);
     totalExpenses += amount;
-    applyExpense(
-      e.paid_by,
-      amount,
-      participants.rows.map((p) => p.trip_user_id)
-    );
+    applyExpense(e.paid_by, amount, allMemberIds);
   }
 
   const settlements = await query<{ from_trip_user_id: string; to_trip_user_id: string; amount: string }>(

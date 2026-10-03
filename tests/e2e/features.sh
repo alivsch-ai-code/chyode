@@ -230,6 +230,12 @@ check "Noch nicht alles beglichen" false "$(curl -s -b $JC $API/trips/$TID/balan
 check "Teilnehmer 1 begleicht restliche 40" 201 "$(jcode POST $J1 $API/trips/$TID/settlements "{\"toTripUserId\":\"$JC_PID\",\"amount\":40}")"
 check "Jetzt alles beglichen" true "$(curl -s -b $JC $API/trips/$TID/balances | jq -r .settled)"
 check "Eigene Ausgabe löschen erlaubt" 204 "$(jcode DELETE $J1 $API/trips/$TID/expenses/$EXPID)"
+# Wer erst nach dem Eintragen einer Ausgabe beitritt, trägt sie trotzdem mit
+LATE=$(jpost $J1 $API/trips '{"title":"Später dabei","location":"X","dateOptions":[{"label":"a","startDate":"2026-11-06","endDate":"2026-11-08"}]}' | jq -r .trip.id)
+jpost $J1 $API/trips/$LATE/expenses '{"description":"Steuer","amount":90}' >/dev/null
+jcode POST $J2 $API/trips/invite/$(curl -s -b $J1 $API/trips/$LATE | jq -r .trip.invite_token)/join >/dev/null
+check "Später Beigetretene teilen frühere Ausgaben" -45 "$(curl -s -b $J2 $API/trips/$LATE/balances | jq -r '.balances[] | select(.name=="E2E Zwei") | .balance')"
+jcode DELETE $J1 $API/trips/$LATE >/dev/null
 check "Unterkunftspreis wieder entfernen" 204 "$(jcode DELETE $JC $API/trips/$TID/accommodation)"
 jcode PUT $JC $API/trips/$TID/accommodation '{"title":"Exclusive Alpenlodge Galsterberg"}' >/dev/null
 
